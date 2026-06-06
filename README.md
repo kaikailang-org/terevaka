@@ -4,11 +4,13 @@ A terminal-UI (TUI) framework for [kaikai](https://github.com/lnds/kaikai).
 The terminal face of the lnds ecosystem — what `manutara` is for the
 web, terevaka is for the terminal.
 
-> **Status:** v0.1 — a working minimal framework. The `Ui` value
-> tree, the terminal layer, three widgets (menu, text input, popup),
-> and a Model/update/view runtime with a non-blocking input loop all
-> compile and run on `kai 0.84.0`. The fiber/nursery architecture
-> from `docs/design.md` (each widget a supervised `ahu.cell`) is
+> **Status:** v0.1 — a working framework. The `Ui` value tree, the
+> terminal layer (with robust size detection), eight widgets (menu,
+> listbox, input, form, popup, confirm, statusbar, board), and a
+> Model/update/view runtime with a flicker-free in-place repaint all
+> compile and run on `kai 0.86.1`. The full-screen kanban example
+> exercises the lot. The fiber/nursery architecture from
+> `docs/design.md` (each live widget a supervised `ahu.cell`) is
 > **v0.2**, blocked on raw-mode-on-the-reactor upstream — see
 > §*What's a value vs what's deferred*.
 
@@ -37,7 +39,7 @@ modal popup, and a live UTC clock that ticks on its own.
 ```
 
 ```sh
-make          # builds the shim + the demo
+make          # builds the shim + all examples (demo, gallery, kanban)
 ./build/demo  # needs a real TTY
 ```
 
@@ -76,8 +78,8 @@ fn main() : Int / Ffi + Clock = {
 | Module | What it is |
 |---|---|
 | `terevaka.term` | The terminal layer: raw mode, non-blocking key reads (assembles arrow keys), no-newline writes, ANSI builders, geometry. The only module carrying `Ffi`. |
-| `terevaka.ui` | The `Ui` value tree (`Text`/`Row`/`Col`/`Box`/`Pad`) + `render(Ui) : [String]`. Pure: building and rendering a view is effect-free, so views are testable by structural equality. Includes `visible_len` (counts display columns, skipping ANSI codes). |
-| `terevaka.app` | The Model/update/view runtime. `run` and `run_overlay` (for modals). Non-blocking poll loop so a clock/spinner advances on idle. |
+| `terevaka.ui` | The `Ui` value tree (`Text`/`Row`/`Col`/`Box`/`Pad`) + `render(Ui) : [String]`. Pure: building and rendering a view is effect-free, so views are testable by structural equality. `Box` takes an inner width *and* an inner height (`box_filled`, 0 = auto) so panels can fill the screen. `visible_len` measures true display columns — it decodes each UTF-8 codepoint and adds its width (2 for emoji/CJK/fullwidth, 1 otherwise), skipping ANSI codes — a local `display_width` since kaikai's stdlib lacks one. |
+| `terevaka.app` | The Model/update/view runtime. `run` and `run_overlay` (for modals). Non-blocking poll loop so a clock/spinner advances on idle. **Flicker-free**: clears once on entry, then repaints in place (cursor home + erase-to-end-of-line per row, never a whole-screen clear per frame) and only when the rendered frame actually changes. |
 | `terevaka.clock` | `hhmmss_utc()` — a tiny clock helper over the `Clock` effect. |
 | `terevaka.widget.menu` | A navigable list: cursor, Up/Down + j/k, highlighted selection. |
 | `terevaka.widget.listbox` | Like menu, but **scrolls**: shows a viewport of N rows, the window follows the cursor, with ▲/▼ indicators and an `n-m/total` counter. |
@@ -86,7 +88,7 @@ fn main() : Int / Ffi + Clock = {
 | `terevaka.widget.popup` | A titled modal box, drawn as an overlay over the base UI. |
 | `terevaka.widget.confirm` | A Yes/No modal dialog: Left/Right or h/l moves, Enter answers, Esc = No, y/n shortcuts. |
 | `terevaka.widget.statusbar` | A bottom help bar: `key action · key action · …` from a list of hints. |
-| `terevaka.widget.board` | A **kanban board**: N columns of cards, with the move-card-between-columns and reorder-within-column operations the leaf widgets can't express (moving a card crosses two lists). |
+| `terevaka.widget.board` | A **kanban board**: N colored columns of typed cards (`{ref, kind, title}`), sized to a given inner width and height (so it fills the screen), with the move-card-between-columns and reorder-within-column operations the leaf widgets can't express (moving a card crosses two lists). Card type markers are ASCII (`+`/`!`/`~`/`.`) so the column widths are exact on every terminal. |
 
 Layout primitives in `ui`: `Row` composes children **side by side,
 multi-line** (so panels align); `split(lw,lt,left, rw,rt,right)`
@@ -99,10 +101,12 @@ builds a two-pane layout; `columns([Ui])` places N panels in a row
 - **`examples/gallery`** — split-pane, scrolling listbox, form
   controls (checkbox/radio/button), status bar, confirm overlay,
   Tab-cycled focus.
-- **`examples/kanban`** — a working kanban board: 3 columns, move
-  cards between columns (`<` `>`), reorder within a column (`K` `J`),
-  add cards (text input), delete (confirm dialog). Proof the widget
-  set composes for a real application.
+- **`examples/kanban`** — a working **full-screen** kanban board: five
+  workflow columns (backlog/todo/doing/done/cancelled) sized to fill
+  the terminal width *and* height, cards shown as `[REF] <type-marker>`
+  + title. Move cards between columns (`<` `>`), reorder within a
+  column (`K` `J`), add cards (text input), delete (confirm dialog).
+  Proof the widget set composes for a real application.
 
 Every widget exposes the same shape: a `State` type, an `update(State,
 Key) -> State` (or an `Outcome`), and a `view(State) -> Ui`. That is
@@ -134,18 +138,21 @@ a real interactive app.
 
 ## Known limitations
 
-- **Fine alignment with wide glyphs.** `visible_len` counts codepoints
-  as width 1; double-width (CJK, emoji) glyphs render wider, so frames
-  around rows mixing them can be off by a column. ASCII + the
-  box-drawing/arrow set used here align cleanly. The real fix is
-  `string.display_width` upstream — filed as kaikai #745 (depends on
-  #744, the String/Char byte-vs-codepoint model). terevaka's
-  `visible_len` is the interim approximation.
+- **Wide-glyph width is an approximation.** `visible_len` decodes each
+  UTF-8 codepoint and assigns width 2 to the common wide ranges (emoji,
+  CJK, fullwidth) and 1 otherwise — enough for the box/arrow set and
+  the glyphs the widgets use, but **not** a full Unicode width table
+  (zero-width/combining marks, regional-indicator pairs, and emoji ZWJ
+  sequences are out of scope). The real fix is `string.display_width`
+  upstream — filed as kaikai #745 (depends on #744, the String/Char
+  byte-vs-codepoint model). terevaka's `visible_len` is the interim
+  local approximation. (The bundled examples sidestep the question by
+  using ASCII type markers.)
 - **No real per-widget concurrency.** Widgets are value state machines
   threaded by the app, not fibers (see *What's a value vs deferred*).
   The clock/spinner tick via the poll loop; a spinner *during a real
   in-flight request*, a live `tail -f`, or panels at independent rates
-  need the fiber architecture — v0.3, blocked on raw-mode-on-reactor.
+  need the fiber architecture — v0.2, blocked on raw-mode-on-reactor.
 - **No mouse, no resize handling (`SIGWINCH`).** Keyboard-first.
 - **UTC clock only** (no localtime in stdlib yet).
 
@@ -154,11 +161,12 @@ a real interactive app.
 terevaka binds the terminal through a C shim (`c/terevaka_term.{c,h}`)
 the way `kohau` binds libsqlite3. `kai build` does not inject link
 flags, so the `Makefile` drives `kaic2` (emit C) then `cc` (link the
-shim). Requirements: `kai` 0.84.0+ on `PATH`, a C compiler.
+shim). Requirements: `kai` 0.86.1+ on `PATH`, a C compiler.
 
 ```sh
-make          # build the demo
-make run      # build + run
+make            # build all examples (demo, gallery, kanban)
+make run        # build + run the demo
+make run-kanban # build + run the kanban board
 make clean
 ```
 
@@ -175,8 +183,11 @@ terevaka/
 │   ├── ui.kai
 │   ├── app.kai
 │   ├── clock.kai
-│   └── widget/{menu,input,popup}.kai
-├── examples/demo/main.kai    # the spike, rebuilt on the framework
+│   └── widget/{menu,listbox,input,form,popup,confirm,statusbar,board}.kai
+├── examples/
+│   ├── demo/main.kai         # menu + input + popup + live clock
+│   ├── gallery/main.kai      # split-pane, listbox, form, confirm, focus
+│   └── kanban/main.kai       # full-screen kanban board
 └── spike/                    # the original raw-FFI spike (kept for reference)
 ```
 
