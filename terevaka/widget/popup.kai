@@ -1,0 +1,36 @@
+# terevaka/widget/popup.kai — a modal popup overlay.
+#
+# Imported as `import terevaka.widget.popup`. A popup is a titled,
+# bordered box meant to be drawn ON TOP of the rest of the UI. It
+# holds a title and body lines; `update` reports whether a key
+# dismissed it (Enter/Esc/q close). The app composites it as an
+# overlay (the runtime paints the base UI, then the popup at an
+# offset).
+
+import terevaka.ui
+import terevaka.term
+
+pub type Popup = { title: String, lines: [String], width: Int }
+
+pub fn make(title: String, lines: [String]) : Popup =
+  Popup { title: title, lines: lines, width: 34 }
+
+# returns true if the key dismisses the popup
+pub fn dismissed(k: term.Key) : Bool =
+  match k {
+    Enter        -> true
+    Esc          -> true
+    Printable(c) -> c == 'q'
+    _            -> false
+  }
+
+# view: a magenta-bordered box. The body lines are plain strings the
+# caller already colored if it wants; this frames them.
+pub fn view(p: Popup) : Ui =
+  ui.box_color(212, p.width, p.title, ui.col(body_uis(p.lines)))
+
+fn body_uis(lines: [String]) : [Ui] =
+  match lines {
+    []           -> []
+    [l, ...rest] -> [ui.text(l), ...body_uis(rest)]
+  }

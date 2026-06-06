@@ -1,0 +1,117 @@
+# examples/demo/main.kai — the terevaka spike, rebuilt on the framework.
+#
+# Same app as terevaka/spike/ (menu + text input + popup + live
+# clock), but now written against the terevaka package instead of
+# raw FFI + hand-rolled ANSI. This is the proof the framework is
+# usable: the app code is ~model + update + view, no terminal
+# plumbing, no manual box drawing.
+#
+# Build: make example   (from the repo root)
+# Run:   ./build/demo
+
+import terevaka.app
+import terevaka.ui
+import terevaka.term
+import terevaka.clock
+import terevaka.widget.menu
+import terevaka.widget.input
+import terevaka.widget.popup
+
+# ---- The model: which screen, the menu, the text field, a status. ----
+type Screen = ScrMenu | ScrEdit | ScrPopup
+
+type Model = {
+  screen: Screen,
+  menu:   menu.Menu,
+  field:  input.Input,
+  status: String,
+  done:   Bool
+}
+
+fn initial() : Model = Model {
+  screen: ScrMenu,
+  menu:   menu.init(["Edit name", "Greet", "About...", "Quit"]),
+  field:  input.init(),
+  status: "↑↓/jk move · Enter select · q quit",
+  done:   false
+}
+
+# ---- update: route the key by screen. ----
+fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
+  if m.done { app.quit() }
+  else {
+    match m.screen {
+      ScrMenu -> update_browsing(m, k)
+      ScrEdit  -> update_editing(m, k)
+      ScrPopup -> update_showing(m, k)
+    }
+  }
+
+fn update_browsing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
+  match k {
+    Enter        -> app.keep(activate(m))
+    Printable(c) -> if c == 'q' { app.quit() } else { app.keep(with_menu(m, menu.update(m.menu, k))) }
+    _            -> app.keep(with_menu(m, menu.update(m.menu, k)))
+  }
+
+fn activate(m: Model) : Model =
+  match menu.selected(m.menu) {
+    0 -> Model { screen: ScrEdit, menu: m.menu, field: input.focus(m.field),
+                 status: "type · Enter save · Esc cancel", done: false }
+    1 -> with_status(m, "Hello, #{greet(input.value(m.field))}!")
+    2 -> Model { screen: ScrPopup, menu: m.menu, field: m.field,
+                 status: "showing About", done: false }
+    _ -> Model { screen: m.screen, menu: m.menu, field: m.field, status: m.status, done: true }
+  }
+
+fn update_editing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
+  match input.update(m.field, k) {
+    Editing(f)  -> app.keep(Model { screen: ScrEdit, menu: m.menu, field: f, status: m.status, done: false })
+    Done(v)     -> app.keep(Model { screen: ScrMenu, menu: m.menu, field: input.blur(input.with_text(v)),
+                                    status: "saved: #{greet(v)}", done: false })
+    Cancelled   -> app.keep(Model { screen: ScrMenu, menu: m.menu, field: input.blur(m.field),
+                                    status: "cancelled", done: false })
+  }
+
+fn update_showing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
+  if popup.dismissed(k) {
+    app.keep(Model { screen: ScrMenu, menu: m.menu, field: m.field, status: "closed popup", done: false })
+  } else { app.keep(m) }
+
+# ---- view: build a Ui value from the model. ----
+fn view(m: Model) : Ui / Clock = {
+  let bar = ui.row([ ui.title("terevaka"), ui.muted("· demo"), ui.label(83, clock.hhmmss_utc()) ])
+  let body = ui.col([
+    menu.view(m.menu),
+    ui.blank(),
+    input.view("name ", m.field),
+    ui.blank(),
+    ui.muted(m.status)
+  ])
+  ui.box(48, "", ui.col([ bar, ui.blank(), body ]))
+}
+
+# the About popup, shown only on the Showing screen
+fn overlay(m: Model) : Option[Ui] / Clock =
+  match m.screen {
+    ScrPopup -> Some(popup.view(popup.make("About terevaka", [
+                 "A TUI framework for kaikai.",
+                 "The UI tree IS a supervision",
+                 "tree — fibers come in v0.2.",
+                 "",
+                 term.fg(220, "Enter / Esc to close")
+               ])))
+    ScrMenu -> None
+    ScrEdit  -> None
+  }
+
+fn with_menu(m: Model, mn: menu.Menu) : Model =
+  Model { screen: m.screen, menu: mn, field: m.field, status: m.status, done: m.done }
+fn with_status(m: Model, s: String) : Model =
+  Model { screen: m.screen, menu: m.menu, field: m.field, status: s, done: m.done }
+fn greet(n: String) : String = if n == "" { "stranger" } else { n }
+
+fn main() : Int / Ffi + Clock = {
+  app.run_overlay(initial(), update, view, overlay, 200)
+  0
+}

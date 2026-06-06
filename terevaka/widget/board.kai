@@ -1,0 +1,255 @@
+# terevaka/widget/board.kai — a kanban board widget.
+#
+# Imported as `import terevaka.widget.board`. The board is N columns,
+# each a titled, colored list of cards, with one active column and a
+# cursor in each. The defining operation of a kanban — MOVING a card
+# between columns (and reordering within one) — lives here; the leaf
+# widgets (listbox, input, confirm) could not express it because
+# moving a card crosses two lists.
+#
+# Each card carries a reference, a type (drives a one-char marker),
+# and a title, and renders as two lines — "[REF] <marker>" then the
+# title — the workflow-board look. Columns carry a status color used
+# for the border (overridden to cyan when the column is active).
+#
+# Navigation:   ← / →  (or h / l)   switch active column
+#               ↑ / ↓  (or k / j)   move the cursor within a column
+# Moving cards: the app binds < / > to move_card_left / right and
+#               K / J to move_card_up / down.
+# Editing:      add_card / remove_selected for the app to drive from
+#               input / confirm widgets.
+#
+# Sizing: `init(columns, width, height)` takes the INNER width of each
+# column box and the INNER height the columns stretch to. The app
+# derives both from the terminal size (term.cols / term.rows) so the
+# board fills the screen; height 0 means auto-fit to content.
+
+import terevaka.ui
+import terevaka.term
+
+# A card's type. Drives the one-char marker shown after the ref. ASCII
+# markers (not emoji) so the width is deterministic on every terminal
+# and the box borders always align.
+pub type CardKind = Feature | Bug | Chore | Task
+
+pub type Card = { ref: String, kind: CardKind, title: String }
+
+pub type Column = { title: String, color: Int, cards: [Card], cursor: Int }
+
+pub type Board = { columns: [Column], active: Int, width: Int, height: Int }
+
+# The one-char type marker. ASCII, width 1 — see the CardKind note.
+pub fn kind_marker(k: CardKind) : String =
+  match k {
+    Feature -> "+"
+    Bug     -> "!"
+    Chore   -> "~"
+    Task    -> "."
+  }
+
+pub fn card(ref: String, kind: CardKind, title: String) : Card =
+  Card { ref: ref, kind: kind, title: title }
+
+pub fn column(title: String, color: Int, cards: [Card]) : Column =
+  Column { title: title, color: color, cards: cards, cursor: 0 }
+
+# `width` is the inner width of each column box; `height` is the inner
+# height the columns stretch to (0 = auto-fit to content).
+pub fn init(columns: [Column], width: Int, height: Int) : Board =
+  Board { columns: columns, active: 0, width: width, height: height }
+
+# ---- queries ----
+pub fn active_column(b: Board) : Int = b.active
+pub fn selected_card(b: Board) : Option[Card] = {
+  let col = nth_col(b.columns, b.active)
+  nth_card(col.cards, col.cursor)
+}
+
+# ---- navigation: only ←→↑↓ here; movement is separate (below) ----
+pub fn update(b: Board, k: term.Key) : Board =
+  match k {
+    Left         -> switch_col(b, -1)
+    Right        -> switch_col(b, 1)
+    Up           -> move_cursor(b, -1)
+    Down         -> move_cursor(b, 1)
+    Printable(c) -> nav_char(b, c)
+    _            -> b
+  }
+
+fn nav_char(b: Board, c: Char) : Board =
+  if c == 'h' { switch_col(b, -1) }
+  else { if c == 'l' { switch_col(b, 1) }
+  else { if c == 'k' { move_cursor(b, -1) }
+  else { if c == 'j' { move_cursor(b, 1) } else { b } } } }
+
+fn switch_col(b: Board, d: Int) : Board =
+  Board { columns: b.columns, active: wrap(b.active + d, count(b.columns)), width: b.width, height: b.height }
+
+fn move_cursor(b: Board, d: Int) : Board = {
+  let col = nth_col(b.columns, b.active)
+  let n = count(col.cards)
+  let cur = if n == 0 { 0 } else { wrap(col.cursor + d, n) }
+  set_col(b, b.active, Column { title: col.title, color: col.color, cards: col.cards, cursor: cur })
+}
+
+# ---- MOVING a card between columns (the kanban operation) ----
+# Take the selected card out of the active column and insert it at the
+# top of the neighbour column; the cursor follows it.
+pub fn move_card_right(b: Board) : Board = move_card(b, 1)
+pub fn move_card_left(b: Board) : Board = move_card(b, -1)
+
+fn move_card(b: Board, d: Int) : Board = {
+  let src_i = b.active
+  let dst_i = wrap(b.active + d, count(b.columns))
+  if src_i == dst_i { b } else {
+    let src = nth_col(b.columns, src_i)
+    match nth_card(src.cards, src.cursor) {
+      None    -> b
+      Some(c) -> {
+        let src2 = Column { title: src.title, color: src.color,
+                            cards: remove_at(src.cards, src.cursor),
+                            cursor: clamp_cursor(src.cursor, count(src.cards) - 1) }
+        let dst = nth_col(b.columns, dst_i)
+        let dst2 = Column { title: dst.title, color: dst.color, cards: [c, ...dst.cards], cursor: 0 }
+        let b1 = set_col(b, src_i, src2)
+        let b2 = set_col(b1, dst_i, dst2)
+        Board { columns: b2.columns, active: dst_i, width: b2.width, height: b2.height }   # follow the card
+      }
+    }
+  }
+}
+
+# ---- REORDERING within the active column ----
+pub fn move_card_up(b: Board) : Board = reorder(b, -1)
+pub fn move_card_down(b: Board) : Board = reorder(b, 1)
+
+fn reorder(b: Board, d: Int) : Board = {
+  let col = nth_col(b.columns, b.active)
+  let i = col.cursor
+  let j = i + d
+  if j < 0 or j >= count(col.cards) { b } else {
+    let swapped = swap_at(col.cards, i, j)
+    set_col(b, b.active, Column { title: col.title, color: col.color, cards: swapped, cursor: j })
+  }
+}
+
+# ---- editing ----
+# Add a card to the active column. The new card's ref is generated
+# from a caller-supplied prefix + the column's next index; the kind
+# defaults to Task (the app can offer a type picker later).
+pub fn add_card(b: Board, ref: String, title: String) : Board = {
+  let col = nth_col(b.columns, b.active)
+  let cards = col.cards ++ [Card { ref: ref, kind: Task, title: title }]
+  set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards, cursor: count(col.cards) })
+}
+
+pub fn remove_selected(b: Board) : Board = {
+  let col = nth_col(b.columns, b.active)
+  if count(col.cards) == 0 { b } else {
+    let cards = remove_at(col.cards, col.cursor)
+    set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards,
+                                  cursor: clamp_cursor(col.cursor, count(cards) - 1) })
+  }
+}
+
+# ---- view: the columns side by side, the active one highlighted,
+# each stretched to the board's inner height. ----
+pub fn view(b: Board) : Ui =
+  ui.columns(col_panels(b.columns, b.active, b.width, b.height, 0))
+
+fn col_panels(cols: [Column], active: Int, w: Int, h: Int, i: Int) : [Ui] =
+  match cols {
+    []           -> []
+    [c, ...rest] -> [col_panel(c, i == active, w, h), ...col_panels(rest, active, w, h, i + 1)]
+  }
+
+fn col_panel(c: Column, is_active: Bool, w: Int, h: Int) : Ui = {
+  let ttl   = "#{c.title} (#{count(c.cards)})"
+  let color = if is_active { 44 } else { c.color }
+  ui.box_filled(color, w, h, ttl, card_list(c.cards, c.cursor, is_active, w, 0))
+}
+
+fn card_list(cards: [Card], cursor: Int, active_col: Bool, w: Int, i: Int) : Ui =
+  match cards {
+    []           -> ui.muted("(empty)")
+    [_c, ..._r]  -> ui.col(card_rows(cards, cursor, active_col, w, i))
+  }
+
+fn card_rows(cards: [Card], cursor: Int, active_col: Bool, w: Int, i: Int) : [Ui] =
+  match cards {
+    []           -> []
+    [c, ...rest] -> card_lines(c, i == cursor, active_col, w) ++ card_rows(rest, cursor, active_col, w, i + 1)
+  }
+
+# each card = 2 lines: "[REF] <marker>" then the title, truncated to
+# the box's inner content width (w - 4: two border + two padding cols).
+fn card_lines(c: Card, on_cursor: Bool, active_col: Bool, w: Int) : [Ui] = {
+  let sel  = on_cursor and active_col
+  # `head` is a colored String (term.fg returns String); wrapping it in
+  # ui.text keeps it one Ui line. (ui.label returns Ui, which cannot be
+  # ++-concatenated with the String marker — that is the concat-mismatch.)
+  let head = term.fg(44, "[#{c.ref}]") ++ " " ++ kind_marker(c.kind)
+  let txt  = ui.cell(c.title, w - 4)
+  let title = if sel { Text(Selected(44), txt) }
+              else { if on_cursor { ui.label(245, txt) } else { Text(Dim, txt) } }
+  [ui.text(head), title]
+}
+
+# ---- pure list helpers ----
+fn remove_at(xs: [a], idx: Int) : [a] =
+  match xs {
+    []           -> []
+    [x, ...rest] -> if idx == 0 { rest } else { [x, ...remove_at(rest, idx - 1)] }
+  }
+
+# Swap the elements at i and j. Implemented as: remove the one at the
+# higher index, reinsert it at the lower — done positionally so no
+# element lookup (which would need a non-total get_at) is required.
+# We only ever call this with adjacent indices (reorder up/down), so a
+# simple adjacent-swap covers every real call; general i/j falls back
+# to identity if non-adjacent.
+fn swap_at(xs: [Card], i: Int, j: Int) : [Card] = {
+  let lo = if i < j { i } else { j }
+  let hi = if i < j { j } else { i }
+  if hi - lo == 1 { adj_swap(xs, lo, 0) } else { xs }
+}
+
+# swap positions `at` and `at+1`
+fn adj_swap(xs: [Card], at: Int, k: Int) : [Card] =
+  match xs {
+    []          -> []
+    [x]         -> [x]
+    [a, b, ...rest] ->
+      if k == at { [b, a, ...rest] }
+      else { [a, ...adj_swap([b, ...rest], at, k + 1)] }
+  }
+
+fn clamp_cursor(cur: Int, max: Int) : Int = if cur > max { if max < 0 { 0 } else { max } } else { cur }
+
+fn nth_col(cols: [Column], i: Int) : Column =
+  match cols {
+    []           -> Column { title: "", color: 240, cards: [], cursor: 0 }   # unreachable in practice; keeps the match total
+    [c, ...rest] -> if i == 0 { c } else { nth_col(rest, i - 1) }
+  }
+
+fn set_col(b: Board, i: Int, col: Column) : Board =
+  Board { columns: replace_at(b.columns, i, col), active: b.active, width: b.width, height: b.height }
+
+fn replace_at(cols: [Column], i: Int, v: Column) : [Column] =
+  match cols {
+    []           -> []
+    [c, ...rest] -> if i == 0 { [v, ...rest] } else { [c, ...replace_at(rest, i - 1, v)] }
+  }
+
+fn nth_card(cards: [Card], i: Int) : Option[Card] =
+  match cards {
+    []           -> None
+    [c, ...rest] -> if i == 0 { Some(c) } else { nth_card(rest, i - 1) }
+  }
+
+fn wrap(i: Int, n: Int) : Int = if n <= 0 { 0 } else { if i < 0 { n - 1 } else { if i >= n { 0 } else { i } } }
+fn count(xs: [a]) : Int =
+  match xs {
+    []           -> 0
+    [x, ...rest] -> 1 + count(rest)
+  }

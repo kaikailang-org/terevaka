@@ -1,0 +1,19 @@
+# Build output — kaic2-generated C, linked binaries, shim objects.
+build/
+spike/build/
+*.o
+
+# Generated C and raw capture artifacts from the spike.
+spike/c/*.o
+*.raw
+
+# Package lock (path/git deps resolved per-checkout; terevaka has none
+# in v0.1, but keep this for when ahu arrives in v0.2).
+kai.lock
+
+# Editor / OS noise.
+dist/
+target/
+*.tmp
+*.bak
+.DS_Store

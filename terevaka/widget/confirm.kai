@@ -1,0 +1,41 @@
+# terevaka/widget/confirm.kai — a Yes/No modal dialog.
+#
+# Imported as `import terevaka.widget.confirm`. A modal asking a
+# question with two buttons (Yes / No). Left/Right or h/l moves the
+# selection; Enter answers; Esc cancels (= No). The app draws it as
+# an overlay like popup, and reads the Answer from `update`.
+
+import terevaka.ui
+import terevaka.term
+
+pub type Confirm = { question: String, on_yes: Bool }   # on_yes = is "Yes" highlighted
+
+pub type Answer = Pending(Confirm) | Yes | No
+
+pub fn make(question: String) : Confirm =
+  Confirm { question: question, on_yes: true }      # defaults to Yes highlighted
+
+pub fn update(c: Confirm, k: term.Key) : Answer =
+  match k {
+    Left         -> Pending(Confirm { question: c.question, on_yes: true })
+    Right        -> Pending(Confirm { question: c.question, on_yes: false })
+    Printable(ch) -> nav_char(c, ch)
+    Enter        -> if c.on_yes { Yes } else { No }
+    Esc          -> No
+    _            -> Pending(c)
+  }
+
+fn nav_char(c: Confirm, ch: Char) : Answer =
+  if ch == 'h' { Pending(Confirm { question: c.question, on_yes: true }) }
+  else { if ch == 'l' { Pending(Confirm { question: c.question, on_yes: false }) }
+  else { if ch == 'y' { Yes } else { if ch == 'n' { No } else { Pending(c) } } } }
+
+pub fn view(c: Confirm) : Ui = {
+  let yes = if c.on_yes  { term.bg(83, term.fg(236, " Yes ")) } else { term.fg(245, " Yes ") }
+  let no  = if c.on_yes  { term.fg(245, " No ") }  else { term.bg(210, term.fg(236, " No ")) }
+  ui.box_color(210, 32, "confirm", ui.col([
+    ui.text(c.question),
+    ui.blank(),
+    ui.row([ ui.text(yes), ui.text("  "), ui.text(no) ])
+  ]))
+}

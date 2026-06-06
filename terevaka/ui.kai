@@ -1,0 +1,342 @@
+# terevaka/ui.kai — the Ui value tree (Level 1 of the design).
+#
+# Imported as `import terevaka.ui`. A view is a VALUE of type `Ui`,
+# an immutable tree the compiler checks and `render` turns into a
+# list of terminal lines. No effects: building and rendering a Ui is
+# pure (the actual painting to the terminal is term.write, done by
+# the app runtime). This is what makes views testable by structural
+# equality and golden-line comparison.
+#
+# Rendering model (v0.1, deliberately simple):
+#   render(ui) : [String]   — a list of ready-to-paint lines, each
+#   already carrying its ANSI color codes. `Col` stacks vertically,
+#   `Box` frames a child, `Text` is one line, `Row` concatenates
+#   children's first lines horizontally (single-line rows in v0.1).
+#   The app runtime positions the lines on screen with term.goto.
+
+import terevaka.term
+import core.string
+
+# ---- Style: a small set of attributes a Text can carry. ----
+pub type Style =
+  Plain
+  | Fg(Int)            # 256-color foreground
+  | FgBold(Int)        # foreground + bold
+  | Dim
+  | Selected(Int)      # a "selected" row: colored background, dark fg
+
+# ---- The Ui tree. ----
+pub type Ui =
+  Text(Style, String)
+  | Line                       # a blank line
+  | Col([Ui])                  # stack children vertically
+  | Row([Ui])                  # place children side by side (single-line)
+  | Box(Int, Int, Int, String, Ui)  # framed: (border color, inner width, inner height, title, child)
+  | Pad(Int, Ui)               # indent child by N spaces
+
+# ---- Smart constructors (the ergonomic surface). ----
+pub fn text(s: String) : Ui = Text(Plain, s)
+pub fn label(code: Int, s: String) : Ui = Text(Fg(code), s)
+pub fn title(s: String) : Ui = Text(FgBold(44), s)
+pub fn muted(s: String) : Ui = Text(Dim, s)
+pub fn blank() : Ui = Line
+pub fn col(kids: [Ui]) : Ui = Col(kids)
+pub fn row(kids: [Ui]) : Ui = Row(kids)
+pub fn pad(n: Int, child: Ui) : Ui = Pad(n, child)
+# A box whose height auto-fits its content (inner height 0 = auto).
+pub fn box(width: Int, ttl: String, child: Ui) : Ui = Box(75, width, 0, ttl, child)
+pub fn box_color(color: Int, width: Int, ttl: String, child: Ui) : Ui = Box(color, width, 0, ttl, child)
+
+# A box stretched to an explicit inner height: the body is padded
+# with blank lines down to `height` (or truncated if the content is
+# taller). This is how a panel fills the vertical space the caller
+# allots it — the caller computes `height` from `term.rows()` minus
+# the chrome above/below. `height <= 0` means auto (same as `box`).
+pub fn box_filled(color: Int, width: Int, height: Int, ttl: String, child: Ui) : Ui =
+  Box(color, width, height, ttl, child)
+
+# split: two boxed panels side by side, each with its own inner width
+# and title. Built on the multi-line Row.
+pub fn split(lw: Int, lt: String, left: Ui, rw: Int, rt: String, right: Ui) : Ui =
+  Row([ box(lw, lt, left), box(rw, rt, right) ])
+
+# columns: N panels in a row, already-rendered Uis placed side by side.
+# This is the general form `split` is the 2-case of — the multi-line
+# Row engine handles any N. Used by the kanban board.
+pub fn columns(panels: [Ui]) : Ui = Row(panels)
+
+# ---- Visible-width measurement. `string.chars` returns BYTES (a
+# multi-byte UTF-8 glyph like ▸ is 3 "chars"), and ANSI color codes
+# add invisible bytes — so neither string.length nor a naive char
+# count gives display columns. This counts VISIBLE columns by:
+#   - skipping ESC '[' ... 'm' color sequences entirely, and
+#   - decoding each UTF-8 codepoint from its lead byte (+ continuation
+#     bytes) and adding its DISPLAY WIDTH — 2 for wide glyphs (emoji,
+#     CJK), 1 otherwise.
+#
+# Why decode, not just count lead bytes: emoji are 2 terminal columns
+# wide but a naive "one column per codepoint" undercounts them by one
+# each, which pushes a box's right border out by one cell per emoji on
+# the line (the bug that breaks the kanban borders). kaikai has no
+# `display_width` in the stdlib (issue #745), so terevaka carries this
+# local approximation. It covers the common wide ranges (emoji + CJK
+# + a few symbol blocks); it is NOT a full Unicode width table, and
+# zero-width / combining marks are out of scope (a v0.2 concern).
+pub fn visible_len(s: String) : Int = vis_loop(string.chars(s), false, 0)
+
+fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
+  match cs {
+    [] -> acc
+    [c, ...rest] ->
+      if in_esc {
+        if c == 'm' { vis_loop(rest, false, acc) } else { vis_loop(rest, true, acc) }
+      } else {
+        let b = char_to_int(c)
+        if b == 27 { vis_loop(rest, true, acc) }                       # ESC: start color seq
+        else { if b < 128 { vis_loop(rest, false, acc + 1) }           # ASCII: 1 column
+        else { if b >= 240 { decode_advance(rest, 3, b - 240, in_esc, acc) }   # 4-byte lead (11110xxx)
+        else { if b >= 224 { decode_advance(rest, 2, b - 224, in_esc, acc) }   # 3-byte lead (1110xxxx)
+        else { if b >= 192 { decode_advance(rest, 1, b - 192, in_esc, acc) }   # 2-byte lead (110xxxxx)
+        else { vis_loop(rest, false, acc) } } } } }                    # stray continuation: skip
+      }
+  }
+
+# Consume `n` continuation bytes, folding them into the codepoint `cp`
+# accumulated from the lead byte's payload, then add the glyph's
+# display width and resume the outer loop.
+fn decode_advance(cs: [Char], n: Int, cp: Int, in_esc: Bool, acc: Int) : Int =
+  if n <= 0 { vis_loop(cs, in_esc, acc + char_width(cp)) }
+  else {
+    match cs {
+      []           -> acc + char_width(cp)                  # truncated UTF-8; count what we have
+      [c, ...rest] -> {
+        let b = char_to_int(c)
+        # continuation byte (10xxxxxx): low 6 bits extend the codepoint
+        if b >= 128 and b <= 191 { decode_advance(rest, n - 1, cp * 64 + (b - 128), in_esc, acc) }
+        else { vis_loop(cs, in_esc, acc + char_width(cp)) }  # malformed: stop folding
+      }
+    }
+  }
+
+# Display width of a Unicode codepoint: 2 for the common wide ranges
+# (emoji + CJK + fullwidth + a few symbol blocks), else 1. Mirrors the
+# East-Asian-Width "W"/"F" buckets enough for the glyphs the widgets
+# use; not a complete table.
+fn char_width(cp: Int) : Int =
+  if cp >= 0x1F300 and cp <= 0x1FAFF { 2 }        # emoji & pictographs
+  else { if cp >= 0x1F000 and cp <= 0x1F0FF { 2 } # mahjong/dominoes/cards
+  else { if cp >= 0x2600 and cp <= 0x27BF { 2 }   # misc symbols + dingbats
+  else { if cp >= 0x2B00 and cp <= 0x2BFF { 2 }   # misc symbols & arrows (stars etc.)
+  else { if cp >= 0x1100 and cp <= 0x115F { 2 }   # Hangul Jamo
+  else { if cp >= 0x2E80 and cp <= 0x303E { 2 }   # CJK radicals .. punctuation
+  else { if cp >= 0x3041 and cp <= 0x33FF { 2 }   # Hiragana .. CJK compat
+  else { if cp >= 0x3400 and cp <= 0x4DBF { 2 }   # CJK ext A
+  else { if cp >= 0x4E00 and cp <= 0x9FFF { 2 }   # CJK unified
+  else { if cp >= 0xA000 and cp <= 0xA4CF { 2 }   # Yi
+  else { if cp >= 0xAC00 and cp <= 0xD7A3 { 2 }   # Hangul syllables
+  else { if cp >= 0xF900 and cp <= 0xFAFF { 2 }   # CJK compat ideographs
+  else { if cp >= 0xFE30 and cp <= 0xFE4F { 2 }   # CJK compat forms
+  else { if cp >= 0xFF00 and cp <= 0xFF60 { 2 }   # fullwidth forms
+  else { if cp >= 0xFFE0 and cp <= 0xFFE6 { 2 }   # fullwidth signs
+  else { 1 } } } } } } } } } } } } } } }
+
+# ---- helpers ----
+pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
+pub fn spaces(n: Int) : String = repeat(" ", n)
+fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
+
+# pad a visible string to `width` columns (right padding)
+pub fn fit(s: String, width: Int) : String = {
+  let v = visible_len(s)
+  if v >= width { s } else { s ++ spaces(width - v) }
+}
+
+# truncate a string to at most `width` visible columns, appending "…"
+# if it was cut. Assumes no ANSI codes in `s` (callers pass raw text,
+# then color the result).
+pub fn truncate(s: String, width: Int) : String = {
+  let v = visible_len(s)
+  if v <= width { s }
+  else { take_cols(string.chars(s), width - 1, 0, "") ++ "…" }
+}
+
+# take the first `n` visible columns (codepoints) of a char/byte list,
+# skipping UTF-8 continuation bytes so multi-byte glyphs stay whole.
+fn take_cols(cs: [Char], n: Int, taken: Int, acc: String) : String =
+  match cs {
+    []           -> acc
+    [c, ...rest] ->
+      if taken >= n { acc }
+      else {
+        let b = char_to_int(c)
+        if b >= 128 and b <= 191 { take_cols(rest, n, taken, acc ++ "#{c}") }  # continuation: keep, don't count
+        else { take_cols(rest, n, taken + 1, acc ++ "#{c}") }
+      }
+  }
+
+# fit-or-truncate: ensure exactly `width` columns (truncate if long,
+# pad if short).
+pub fn cell(s: String, width: Int) : String = fit(truncate(s, width), width)
+
+# apply a Style to a raw string, producing the colored string
+fn styled(st: Style, s: String) : String =
+  match st {
+    Plain        -> s
+    Fg(c)        -> term.fg(c, s)
+    FgBold(c)    -> term.bold(term.fg(c, s))
+    Dim          -> term.dim(s)
+    Selected(c)  -> term.bg(c, term.fg(236, s))
+  }
+
+# ---- render: Ui -> [String] (a list of painted lines). ----
+pub fn render(u: Ui) : [String] =
+  match u {
+    Text(st, s)   -> [styled(st, s)]
+    Line          -> [""]
+    Col(kids)     -> render_all(kids)
+    Pad(n, child) -> pad_lines(render(child), n)
+    Row(kids)        -> render_row(kids)
+    Box(col, w, h, t, c) -> render_box(col, w, h, t, render(c))
+  }
+
+# render a list of Uis and concatenate their line-lists
+fn render_all(kids: [Ui]) : [String] =
+  match kids {
+    []           -> []
+    [k, ...rest] -> render(k) ++ render_all(rest)
+  }
+
+# indent every line of a block by n spaces
+fn pad_lines(lines: [String], n: Int) : [String] =
+  match lines {
+    []           -> []
+    [l, ...rest] -> [spaces(n) ++ l, ...pad_lines(rest, n)]
+  }
+
+# Row: lay children side by side, MULTI-LINE. Each child renders to a
+# block of lines; we pad every block to a uniform width (its widest
+# line) and height (the tallest block), then glue the blocks line by
+# line with a 1-space gutter. This makes split-panes, sidebars, and
+# (ASCII) tables expressible, not just single-line label rows.
+fn render_row(kids: [Ui]) : [String] = {
+  let blocks = blockify(kids)        # each child -> a width-uniform block
+  let h = max_height(blocks, 0)
+  glue_blocks(pad_heights(blocks, h), "")
+}
+
+# render each child and pad its lines to the block's own width
+fn blockify(kids: [Ui]) : [[String]] =
+  match kids {
+    []           -> []
+    [k, ...rest] -> {
+      let lines = render(k)
+      let w = max_width(lines, 0)
+      [pad_block_width(lines, w), ...blockify(rest)]
+    }
+  }
+
+fn max_width(lines: [String], acc: Int) : Int =
+  match lines {
+    []           -> acc
+    [l, ...rest] -> max_width(rest, max_int(acc, visible_len(l)))
+  }
+
+fn pad_block_width(lines: [String], w: Int) : [String] =
+  match lines {
+    []           -> []
+    [l, ...rest] -> [fit(l, w), ...pad_block_width(rest, w)]
+  }
+
+fn max_height(blocks: [[String]], acc: Int) : Int =
+  match blocks {
+    []           -> acc
+    [b, ...rest] -> max_height(rest, max_int(acc, len_of(b)))
+  }
+
+# pad each block to `h` lines by appending blank lines (full-width)
+fn pad_heights(blocks: [[String]], h: Int) : [[String]] =
+  match blocks {
+    []           -> []
+    [b, ...rest] -> {
+      let w = max_width(b, 0)
+      [extend_lines(b, w, h - len_of(b)), ...pad_heights(rest, h)]
+    }
+  }
+
+fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
+  if extra <= 0 { b } else { b ++ [spaces(w)] ++ extend_lines([], w, extra - 1) }
+
+# glue N blocks (all same height) line by line, with a 1-space gutter
+fn glue_blocks(blocks: [[String]], gutter: String) : [String] =
+  match blocks {
+    []           -> []
+    [b]          -> b
+    [b, ...rest] -> zip_lines(b, glue_blocks(rest, gutter), gutter)
+  }
+
+fn zip_lines(a: [String], b: [String], gutter: String) : [String] =
+  match a {
+    [] -> []
+    [x, ...ra] -> match b {
+      [] -> [x]
+      [y, ...rb] -> [x ++ gutter ++ y, ...zip_lines(ra, rb, gutter)]
+    }
+  }
+
+fn len_of(xs: [a]) : Int =
+  match xs {
+    []           -> 0
+    [x, ...rest] -> 1 + len_of(rest)
+  }
+
+# Box: frame a block of lines with a rounded border in color `col`,
+# inner width `w`, an optional title in the top border. When `h > 0`
+# the body is fit to exactly `h` lines (padded with blanks below, or
+# truncated from the bottom if the content is taller); `h <= 0` keeps
+# the body's natural height.
+fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = {
+  let top = if t == "" {
+    term.fg(col, "╭" ++ repeat("─", w) ++ "╮")
+  } else {
+    let tv = visible_len(t)
+    term.fg(col, "╭─ ") ++ term.bold(t) ++ term.fg(col, " " ++ repeat("─", w - tv - 3) ++ "╮")
+  }
+  let bot = term.fg(col, "╰" ++ repeat("─", w) ++ "╯")
+  let sized = if h <= 0 { body } else { fit_height(body, h) }
+  [top] ++ box_body(col, sized, w) ++ [bot]
+}
+
+# Fit a block of lines to exactly `h` lines: truncate from the bottom
+# if longer, pad with empty strings if shorter. Padding uses "" (not
+# spaces) on purpose — box_body fits every line to the inner width and
+# adds the colored borders, so an empty body line becomes a properly
+# bordered blank row without us duplicating the width/color work here.
+fn fit_height(lines: [String], h: Int) : [String] = {
+  let n = len_of(lines)
+  if n == h { lines }
+  else { if n > h { take_lines(lines, h) } else { lines ++ blank_lines(h - n) } }
+}
+
+fn take_lines(lines: [String], n: Int) : [String] =
+  if n <= 0 { [] } else {
+    match lines {
+      []           -> []
+      [l, ...rest] -> [l, ...take_lines(rest, n - 1)]
+    }
+  }
+
+fn blank_lines(n: Int) : [String] =
+  if n <= 0 { [] } else { ["", ...blank_lines(n - 1)] }
+
+# A content row spans EXACTLY the same width as the top/bottom border.
+# The border is `╭` + w dashes + `╮` = w+2 columns. The body must match:
+# `│ ` (2) + content fit to (w-2) + ` │` (2) = w+2. The old form ended in
+# a bare `│` (only w+1 columns), so the right border sat one cell left of
+# the corner — the "broken / detached right border" in the kanban. The
+# symmetric one-space padding on both sides fixes the alignment.
+fn box_body(col: Int, lines: [String], w: Int) : [String] =
+  match lines {
+    []           -> []
+    [l, ...rest] -> [term.fg(col, "│ ") ++ fit(l, w - 2) ++ term.fg(col, " │"), ...box_body(col, rest, w)]
+  }
+

@@ -1,0 +1,89 @@
+# terevaka/term.kai — the terminal layer.
+#
+# Imported as `import terevaka.term`. Wraps the C shim
+# (c/terevaka_term.{c,h}) plus the ANSI escape primitives every
+# higher layer (ui, widgets, app) builds on. This is the only module
+# that carries `Ffi` in its row — everything above it stays Ffi-free
+# until it actually touches the terminal.
+#
+# Surface:
+#   - raw mode lifecycle: raw_enable / raw_disable
+#   - input: poll_key(ms) -> Key (non-blocking, assembles arrows)
+#   - output: write(s) (no newline), and the ANSI builders below
+#   - geometry: rows() / cols()
+
+# ---- FFI to the shim ----
+extern "C" fn kai_tvk_raw_enable() : Int / Ffi
+extern "C" fn kai_tvk_raw_disable() : Int / Ffi
+extern "C" fn kai_tvk_poll_key(timeout_ms: Int) : Int / Ffi
+extern "C" fn kai_tvk_write(s: String) : Int / Ffi
+extern "C" fn kai_tvk_term_rows() : Int / Ffi
+extern "C" fn kai_tvk_term_cols() : Int / Ffi
+
+# ---- Lifecycle ----
+pub fn raw_enable() : Unit / Ffi = { let _ = kai_tvk_raw_enable(); () }
+pub fn raw_disable() : Unit / Ffi = { let _ = kai_tvk_raw_disable(); () }
+pub fn rows() : Int / Ffi = kai_tvk_term_rows()
+pub fn cols() : Int / Ffi = kai_tvk_term_cols()
+
+# ---- Keys ----
+# The byte stream from the terminal, assembled into logical keys.
+# `Tick` is synthetic: returned when a poll times out with no input,
+# so an app loop can refresh (and advance a clock) while idle.
+pub type Key =
+  Up | Down | Left | Right
+  | Enter | Backspace | Esc | Tab
+  | Printable(Char)
+  | Tick
+  | Unknown
+
+# Poll for one key, waiting at most `ms`. Arrow keys arrive as the
+# 3-byte ESC '[' 'A'/'B'/'C'/'D' sequence and are read byte-by-byte.
+pub fn poll_key(ms: Int) : Key / Ffi = {
+  let b = kai_tvk_poll_key(ms)
+  if b == -1 { Tick }
+  else { if b < 0 { Unknown }
+  else { if b == 27 {
+    let b2 = kai_tvk_poll_key(20)
+    if b2 == 91 {
+      match kai_tvk_poll_key(20) {
+        65 -> Up   66 -> Down   67 -> Right   68 -> Left   _ -> Unknown
+      }
+    } else { Esc }
+  } else {
+    match b {
+      13 -> Enter   10 -> Enter
+      9 -> Tab
+      127 -> Backspace   8 -> Backspace
+      _ -> if b >= 32 { Printable(int_to_char(b)) } else { Unknown }
+    }
+  } } }
+}
+
+# ---- Raw output ----
+pub fn write(s: String) : Unit / Ffi = { let _ = kai_tvk_write(s); () }
+
+# ---- ANSI escape builders (pure String functions; no Ffi) ----
+# ESC is byte 27, interpolated as a Char so no literal-escape needed.
+pub fn esc() : String = "#{int_to_char(27)}"
+
+pub fn clear() : String = "#{esc()}[2J#{esc()}[H"
+# Move the cursor to the top-left WITHOUT erasing the screen. Used by
+# the in-place repaint path: overwriting every cell with the new frame
+# avoids the whole-screen erase (ESC[2J) that the terminal shows as a
+# flash on each repaint. Pair with `clear_eol` per line so a shorter
+# new line erases the tail of the old one.
+pub fn home() : String = "#{esc()}[H"
+# Erase from the cursor to the end of the current line (ESC[K).
+pub fn clear_eol() : String = "#{esc()}[K"
+pub fn goto(row: Int, col: Int) : String = "#{esc()}[#{row};#{col}H"
+pub fn hide_cursor() : String = "#{esc()}[?25l"
+pub fn show_cursor() : String = "#{esc()}[?25h"
+
+# 256-color foreground / background + attributes, wrapping `s` and
+# resetting after. Composing two is fine — each resets only itself.
+pub fn fg(code: Int, s: String) : String = "#{esc()}[38;5;#{code}m#{s}#{esc()}[0m"
+pub fn bg(code: Int, s: String) : String = "#{esc()}[48;5;#{code}m#{s}#{esc()}[0m"
+pub fn bold(s: String) : String = "#{esc()}[1m#{s}#{esc()}[0m"
+pub fn dim(s: String) : String = "#{esc()}[2m#{s}#{esc()}[0m"
+pub fn invert(s: String) : String = "#{esc()}[7m#{s}#{esc()}[0m"

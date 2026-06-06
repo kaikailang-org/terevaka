@@ -1,0 +1,333 @@
+# terevaka spike — a real TUI in kaikai, now with a live clock and a popup.
+#
+# A navigable menu (arrow keys / j-k), a text-input field, a LIVE
+# CLOCK that ticks on its own while you navigate, and a modal POPUP.
+#
+# Driven through raw terminal mode via an FFI shim (c/tui_shim.c).
+# Input is NON-BLOCKING (poll with a timeout) so the clock can tick
+# between keystrokes — see the honesty note below and in c/tui_shim.c.
+#
+# This is a SPIKE. It proves the terminal surface terevaka needs is
+# reachable today (raw mode + keys + ANSI render + a concurrent
+# clock) on kai 0.84.0 with a thin C shim. It does NOT yet use the
+# fiber/nursery architecture from ../docs/design.md: here the clock
+# ticks via a poll/timeout loop, not a render fiber + input-pump
+# fiber + widget cells. Raw-mode-on-the-reactor (which would let the
+# input pump be a real parked fiber) is a stdlib gap; poll() bridges
+# it. The fiber gate is verified separately in the design doc.
+#
+# Build:  make
+# Run:    ./build/demo    (needs a real TTY)
+# Quit:   q
+
+import core.string
+import time
+
+# ---- FFI: the terminal shim ----
+extern "C" fn kai_tui_raw_enable() : Int / Ffi
+extern "C" fn kai_tui_raw_disable() : Int / Ffi
+extern "C" fn kai_tui_poll_key(timeout_ms: Int) : Int / Ffi
+extern "C" fn kai_tui_write(s: String) : Int / Ffi
+
+# ---- Keys ----
+type Key =
+  Up | Down | Left | Right
+  | Enter | Backspace | Esc
+  | Printable(Char)
+  | Tick                       # synthetic: no key arrived, just refresh
+  | Other
+
+# Poll for input up to `ms`. Returns Tick on timeout so the loop
+# refreshes (and the clock advances) even when idle. Arrow keys are
+# the 3-byte ESC [ A/B/C/D sequence, read byte-by-byte.
+fn poll_key(ms: Int) : Key / Ffi = {
+  let b = kai_tui_poll_key(ms)
+  if b == -1 { Tick }                  # timeout, nobody pressed anything
+  else { if b < 0 { Other }            # EOF / error
+  else { if b == 27 {                  # ESC — maybe an arrow
+    let b2 = kai_tui_poll_key(20)
+    if b2 == 91 {                      # '['
+      let b3 = kai_tui_poll_key(20)
+      match b3 { 65 -> Up  66 -> Down  67 -> Right  68 -> Left  _ -> Other }
+    } else { Esc }
+  } else {
+    match b {
+      13 -> Enter   10 -> Enter
+      127 -> Backspace   8 -> Backspace
+      _ -> if b >= 32 { Printable(int_to_char(b)) } else { Other }
+    }
+  } } }
+}
+
+# ---- ANSI render ----
+fn esc() : String = "#{int_to_char(27)}"
+fn out(s: String) : Unit / Ffi = { let _ = kai_tui_write(s); () }
+fn clear_screen() : Unit / Ffi = out("#{esc()}[2J#{esc()}[H")
+fn move_to(row: Int, col: Int) : Unit / Ffi = out("#{esc()}[#{row};#{col}H")
+fn hide_cursor() : Unit / Ffi = out("#{esc()}[?25l")
+fn show_cursor() : Unit / Ffi = out("#{esc()}[?25h")
+fn color(code: String, s: String) : String = "#{esc()}[#{code}m#{s}#{esc()}[0m"
+fn fg_cyan(s: String)   : String = color("38;5;44", s)
+fn fg_yellow(s: String) : String = color("38;5;220", s)
+fn fg_green(s: String)  : String = color("38;5;83", s)
+fn fg_blue(s: String)   : String = color("38;5;75", s)
+fn fg_pink(s: String)   : String = color("38;5;212", s)
+fn fg_dim(s: String)    : String = color("38;5;245", s)
+fn bold(s: String)      : String = color("1", s)
+# selected menu row: bright bg + dark fg
+fn selected_row(s: String) : String = color("48;5;44;38;5;236", s)
+
+# ---- box drawing (Unicode). NOTE: string.length counts BYTES, and
+# box chars are 3 bytes each in UTF-8 — so widths are tracked by
+# CHARACTER count, passed explicitly, never via string.length. ----
+fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
+
+# pad a string (of known visible width `vis`) on the right to `width`
+fn pad_to(s: String, vis: Int, width: Int) : String = s ++ repeat(" ", width - vis)
+
+# Count VISIBLE columns of a string: skip ANSI escape sequences
+# (ESC '[' ... 'm') entirely, and count each remaining Char as width
+# 1. (Good enough for this spike: ASCII + simple box chars, which
+# `chars` already splits per-codepoint, so width == codepoint count.)
+fn string_visible_len(s: String) : Int = vis_loop(string.chars(s), false, 0)
+
+fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
+  match cs {
+    [] -> acc
+    [c, ...rest] ->
+      if in_esc {
+        # inside an escape; it ends at the final letter 'm'
+        if c == 'm' { vis_loop(rest, false, acc) } else { vis_loop(rest, true, acc) }
+      } else {
+        if char_to_int(c) == 27 { vis_loop(rest, true, acc) }   # ESC starts a sequence
+        else { vis_loop(rest, false, acc + 1) }
+      }
+  }
+
+# ---- The clock: epoch seconds -> "HH:MM:SS" (UTC; no localtime in
+# stdlib yet). Pure integer arithmetic. ----
+fn pad2(n: Int) : String = if n < 10 { "0#{n}" } else { "#{n}" }
+
+fn clock_string() : String / Clock = {
+  let secs = time.now().secs
+  let day  = secs % 86400
+  let h    = day / 3600
+  let m    = (day % 3600) / 60
+  let s    = day % 60
+  "#{pad2(h)}:#{pad2(m)}:#{pad2(s)} UTC"
+}
+
+# ---- App state ----
+type Screen = Menu | Editing | Popup
+
+type State = {
+  screen:   Screen,
+  selected: Int,          # menu cursor 0..3
+  name:     String,
+  status:   String
+}
+
+fn items() : [String] = ["Edit name", "Greet", "About...", "Quit"]
+fn item_count() : Int = 4
+
+# ---- Layout constants. The whole app lives inside one rounded
+# frame; APP_W is its inner width in visible characters. ----
+fn app_left() : Int = 4
+fn app_top()  : Int = 2
+fn app_w()    : Int = 46          # inner width (chars between the │ borders)
+
+fn box_row(row: Int, col: Int, s: String) : Unit / Ffi = { move_to(row, col); out(s) }
+
+# ---- View ----
+fn view(s: State) : Unit / Ffi + Clock = {
+  render_frame(s)
+  render_menu(items(), s.selected)
+  render_field(s)
+  render_hint(s)
+  # the popup is a modal overlay painted LAST, on top of everything
+  match s.screen { Popup -> render_popup() Menu -> () Editing -> () }
+}
+
+# The outer frame: a rounded box with a title bar (title left, clock
+# right) and a divider under it.
+fn render_frame(s: State) : Unit / Ffi + Clock = {
+  let l = app_left()
+  let t = app_top()
+  let w = app_w()
+  # top border
+  box_row(t, l, fg_blue("╭" ++ repeat("─", w) ++ "╮"))
+  # title bar: " terevaka " (10) ... clock (right-aligned)
+  let clk   = clock_string()                       # visible width = 12 (HH:MM:SS UTC)
+  let title = " " ++ bold(fg_cyan("terevaka")) ++ fg_dim(" · tui spike") ++ " "
+  let title_vis = 1 + 8 + 12 + 1                   # " "+"terevaka"+" · tui spike"+" "
+  let gap = w - title_vis - 12 - 1                 # room before the clock
+  box_row(t + 1, l, fg_blue("│") ++ title ++ repeat(" ", gap) ++ fg_green(clk) ++ " " ++ fg_blue("│"))
+  # divider
+  box_row(t + 2, l, fg_blue("├" ++ repeat("─", w) ++ "┤"))
+  # blank rows for the body (rows t+3 .. t+11), then bottom border
+  render_blank_rows(t + 3, 9)
+  box_row(t + 12, l, fg_blue("╰" ++ repeat("─", w) ++ "╯"))
+}
+
+fn render_blank_rows(start: Int, n: Int) : Unit / Ffi =
+  if n <= 0 { () } else {
+    box_row(start, app_left(), fg_blue("│") ++ repeat(" ", app_w()) ++ fg_blue("│"))
+    render_blank_rows(start + 1, n - 1)
+  }
+
+# menu starts a few rows into the body, indented
+fn menu_top() : Int = app_top() + 4
+
+fn render_menu(its: [String], selected: Int) : Unit / Ffi = render_menu_loop(its, selected, 0)
+
+fn render_menu_loop(its: [String], selected: Int, i: Int) : Unit / Ffi =
+  match its {
+    [] -> ()
+    [x, ...rest] -> {
+      box_row(menu_top() + i, app_left() + 3, menu_item(x, i == selected))
+      render_menu_loop(rest, selected, i + 1)
+    }
+  }
+
+# a menu item: selected → arrow + filled bar; otherwise dim
+fn menu_item(label: String, sel: Bool) : String = {
+  let vis = string_visible_len(label)
+  if sel {
+    fg_yellow("▸ ") ++ selected_row(" " ++ label ++ repeat(" ", 16 - vis) ++ " ")
+  } else {
+    "  " ++ fg_dim(" " ++ label ++ repeat(" ", 16 - vis) ++ " ")
+  }
+}
+
+# the text field, framed inline in the body
+fn render_field(s: State) : Unit / Ffi = {
+  let row = menu_top() + 5
+  let cursor = match s.screen { Editing -> fg_green("▏") Menu -> "" Popup -> "" }
+  let val = if s.name == "" { fg_dim("(empty)") } else { s.name }
+  box_row(row, app_left() + 3, fg_dim("name ") ++ fg_blue("⟨ ") ++ val ++ cursor ++ fg_blue(" ⟩"))
+}
+
+# a hint / status line near the bottom of the frame
+fn render_hint(s: State) : Unit / Ffi = {
+  box_row(app_top() + 11, app_left() + 3, fg_dim(s.status))
+}
+
+# ---- The popup: a centered rounded modal over the UI. ----
+fn render_popup() : Unit / Ffi = {
+  let pw = 32                                  # inner width
+  let l  = app_left() + 9                      # roughly centered in the frame
+  let t  = app_top() + 3
+  pop_border(t,     l, pw, "╭", "╮")
+  pop_line(t + 1,   l, pw, bold(fg_pink("  About terevaka")))
+  pop_line(t + 2,   l, pw, "")
+  pop_line(t + 3,   l, pw, fg_dim("  A TUI framework for kaikai."))
+  pop_line(t + 4,   l, pw, fg_dim("  The UI tree ") ++ bold("IS") ++ fg_dim(" a"))
+  pop_line(t + 5,   l, pw, fg_dim("  supervision tree."))
+  pop_line(t + 6,   l, pw, "")
+  pop_line(t + 7,   l, pw, fg_yellow("  Enter") ++ fg_dim(" / ") ++ fg_yellow("Esc") ++ fg_dim(" to close"))
+  pop_border(t + 8, l, pw, "╰", "╯")
+}
+
+fn pop_border(row: Int, col: Int, w: Int, lc: String, rc: String) : Unit / Ffi =
+  box_row(row, col, fg_pink(lc ++ repeat("─", w) ++ rc))
+
+# a popup content line: │ + content padded to w + │
+fn pop_line(row: Int, col: Int, w: Int, content: String) : Unit / Ffi = {
+  let vis = string_visible_len(content)
+  box_row(row, col, fg_pink("│") ++ content ++ repeat(" ", w - vis) ++ fg_pink("│"))
+}
+
+# ---- Update ----
+fn update(s: State, k: Key) : State =
+  match s.screen {
+    Menu    -> update_menu(s, k)
+    Editing -> update_editing(s, k)
+    Popup   -> update_popup(s, k)
+  }
+
+fn update_menu(s: State, k: Key) : State =
+  match k {
+    Up           -> with_sel(s, wrap(s.selected - 1, item_count()))
+    Down         -> with_sel(s, wrap(s.selected + 1, item_count()))
+    Printable(c) -> menu_char(s, c)
+    Enter        -> activate(s)
+    _            -> s                    # Tick / Other: state unchanged, clock still refreshes
+  }
+
+fn with_sel(s: State, sel: Int) : State =
+  State { screen: Menu, selected: sel, name: s.name, status: s.status }
+
+fn menu_char(s: State, c: Char) : State =
+  if c == 'j' { update_menu(s, Down) }
+  else { if c == 'k' { update_menu(s, Up) }
+  else { if c == 'q' { State { screen: Menu, selected: 3, name: s.name, status: "bye" } }
+  else { s } } }
+
+fn activate(s: State) : State =
+  match s.selected {
+    0 -> State { screen: Editing, selected: 0, name: s.name, status: "editing - type, Enter to confirm, Esc to cancel" }
+    1 -> State { screen: Menu, selected: 1, name: s.name, status: "Hello, #{greet_name(s.name)}!" }
+    2 -> State { screen: Popup, selected: 2, name: s.name, status: "showing About popup" }
+    _ -> State { screen: Menu, selected: 3, name: s.name, status: "bye" }
+  }
+
+fn greet_name(n: String) : String = if n == "" { "stranger" } else { n }
+
+fn update_editing(s: State, k: Key) : State =
+  match k {
+    Printable(c) -> State { screen: Editing, selected: s.selected, name: s.name ++ "#{c}", status: s.status }
+    Backspace    -> State { screen: Editing, selected: s.selected, name: drop_last(s.name), status: s.status }
+    Enter        -> State { screen: Menu, selected: 0, name: s.name, status: "saved: #{greet_name(s.name)}" }
+    Esc          -> State { screen: Menu, selected: 0, name: s.name, status: "cancelled" }
+    _            -> s
+  }
+
+# In the popup, any of Enter/Esc/q closes it; everything else (incl.
+# Tick) leaves it open — so the clock keeps ticking UNDER the popup.
+fn update_popup(s: State, k: Key) : State =
+  match k {
+    Enter -> close_popup(s)
+    Esc   -> close_popup(s)
+    Printable(c) -> if c == 'q' { close_popup(s) } else { s }
+    _     -> s
+  }
+
+fn close_popup(s: State) : State =
+  State { screen: Menu, selected: 2, name: s.name, status: "closed popup" }
+
+# ---- helpers ----
+fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+
+fn drop_last(s: String) : String = {
+  let n = string.length(s)
+  if n == 0 { "" } else { string.slice(s, 0, n - 1) }
+}
+
+fn should_quit(s: State) : Bool =
+  match s.screen { Menu -> s.status == "bye" Editing -> false Popup -> false }
+
+# ---- The loop. Non-blocking: poll input up to 200ms, then repaint.
+# When idle, poll_key returns Tick every 200ms and the clock advances.
+# In terevaka this is a render fiber + input-pump fiber + a clock
+# cell, all under one nursery; here it is one poll/timeout loop. ----
+fn run_loop(s: State) : Unit / Ffi + Clock = {
+  clear_screen()
+  view(s)
+  if should_quit(s) { () }
+  else { run_loop(update(s, poll_key(200))) }
+}
+
+fn main() : Int / Ffi + Stdout + Clock = {
+  let _ = kai_tui_raw_enable()
+  hide_cursor()
+  let initial = State {
+    screen: Menu, selected: 0, name: "",
+    status: "↑↓/jk move · Enter select · q quit"
+  }
+  run_loop(initial)
+  show_cursor()
+  clear_screen()
+  let _ = kai_tui_raw_disable()
+  Stdout.print("terevaka spike: bye")
+  0
+}

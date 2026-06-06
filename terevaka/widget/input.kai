@@ -1,0 +1,48 @@
+# terevaka/widget/input.kai — a single-line text input widget.
+#
+# Imported as `import terevaka.widget.input`. Holds the typed text
+# and whether it is focused (drawing a cursor). `update` appends
+# printable keys, deletes on Backspace, and reports done/cancel on
+# Enter/Esc via the returned Outcome so the app can react.
+
+import terevaka.ui
+import terevaka.term
+import core.string
+
+pub type Input = { text: String, focused: Bool }
+
+# what an update produced, so the app can route the result
+pub type Outcome = Editing(Input) | Done(String) | Cancelled
+
+pub fn init() : Input = Input { text: "", focused: false }
+pub fn with_text(s: String) : Input = Input { text: s, focused: false }
+pub fn focus(i: Input) : Input = Input { text: i.text, focused: true }
+pub fn blur(i: Input) : Input = Input { text: i.text, focused: false }
+pub fn value(i: Input) : String = i.text
+
+pub fn update(i: Input, k: term.Key) : Outcome =
+  match k {
+    Printable(c) -> Editing(Input { text: i.text ++ "#{c}", focused: i.focused })
+    Backspace    -> Editing(Input { text: drop_last(i.text), focused: i.focused })
+    Enter        -> Done(i.text)
+    Esc          -> Cancelled
+    _            -> Editing(i)
+  }
+
+# view: a framed field with a label; shows a cursor block when focused
+pub fn view(lbl: String, i: Input) : Ui = {
+  let shown = if i.text == "" { term.dim("(empty)") } else { i.text }
+  let cursor = if i.focused { term.fg(83, "▏") } else { "" }
+  ui.row([
+    ui.muted(lbl),
+    ui.label(75, "⟨"),
+    ui.text(" " ++ shown ++ cursor ++ " "),
+    ui.label(75, "⟩")
+  ])
+}
+
+# ---- local helpers ----
+fn drop_last(s: String) : String = {
+  let n = string.length(s)
+  if n == 0 { "" } else { string.slice(s, 0, n - 1) }
+}

@@ -1,0 +1,24 @@
+# terevaka/widget/statusbar.kai — a bottom help/shortcut bar.
+#
+# Imported as `import terevaka.widget.statusbar`. A single line of
+# key→action hints, the convention every TUI has at the bottom. Pure
+# view (no state); the app decides what hints to show per screen.
+
+import terevaka.ui
+import terevaka.term
+
+pub type Hint = { key: String, action: String }
+
+pub fn hint(key: String, action: String) : Hint = Hint { key: key, action: action }
+
+# render a list of hints as "key action · key action · …"
+pub fn view(hints: [Hint]) : Ui = ui.text(join_hints(hints))
+
+fn join_hints(hs: [Hint]) : String =
+  match hs {
+    []           -> ""
+    [h]          -> one(h)
+    [h, ...rest] -> one(h) ++ term.fg(238, "  ·  ") ++ join_hints(rest)
+  }
+
+fn one(h: Hint) : String = term.fg(44, h.key) ++ " " ++ term.fg(245, h.action)

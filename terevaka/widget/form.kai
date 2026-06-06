@@ -1,0 +1,111 @@
+# terevaka/widget/form.kai — basic form controls: checkbox, radio, button.
+#
+# Imported as `import terevaka.widget.form`. Three small stateful
+# controls, each State + update + view. They are deliberately tiny —
+# the value of having them is a consistent look and the
+# update-on-Space/Enter conventions, not cleverness.
+
+import terevaka.ui
+import terevaka.term
+
+# ============================================================
+# Checkbox — a single on/off toggle. Space flips it.
+# ============================================================
+pub type Checkbox = { label: String, checked: Bool }
+
+pub fn checkbox(label: String, checked: Bool) : Checkbox =
+  Checkbox { label: label, checked: checked }
+
+pub fn toggle(c: Checkbox) : Checkbox =
+  Checkbox { label: c.label, checked: not c.checked }
+
+# Space toggles; other keys leave it unchanged.
+pub fn checkbox_update(c: Checkbox, k: term.Key) : Checkbox =
+  match k {
+    Printable(ch) -> if ch == ' ' { toggle(c) } else { c }
+    _             -> c
+  }
+
+pub fn checkbox_view(c: Checkbox, focused: Bool) : Ui = {
+  let mark = if c.checked { term.fg(83, "[x]") } else { term.fg(245, "[ ]") }
+  let lbl  = if focused { term.fg(220, c.label) } else { c.label }
+  ui.text(mark ++ " " ++ lbl)
+}
+
+# ============================================================
+# Radio group — N options, exactly one selected. Up/Down or j/k
+# moves; Space/Enter selects the highlighted one.
+# ============================================================
+pub type Radio = { options: [String], cursor: Int, chosen: Int }
+
+pub fn radio(options: [String]) : Radio =
+  Radio { options: options, cursor: 0, chosen: 0 }
+
+pub fn radio_chosen(r: Radio) : Int = r.chosen
+pub fn radio_chosen_label(r: Radio) : String = nth(r.options, r.chosen, "")
+
+pub fn radio_update(r: Radio, k: term.Key) : Radio =
+  match k {
+    Up           -> move_cursor(r, -1)
+    Down         -> move_cursor(r, 1)
+    Printable(c) -> if c == 'k' { move_cursor(r, -1) }
+                    else { if c == 'j' { move_cursor(r, 1) }
+                    else { if c == ' ' { choose(r) } else { r } } }
+    Enter        -> choose(r)
+    _            -> r
+  }
+
+fn move_cursor(r: Radio, d: Int) : Radio =
+  Radio { options: r.options, cursor: wrap(r.cursor + d, count(r.options)), chosen: r.chosen }
+fn choose(r: Radio) : Radio =
+  Radio { options: r.options, cursor: r.cursor, chosen: r.cursor }
+
+pub fn radio_view(r: Radio, focused: Bool) : Ui =
+  ui.col(radio_rows(r.options, r.cursor, r.chosen, focused, 0))
+
+fn radio_rows(opts: [String], cursor: Int, chosen: Int, focused: Bool, i: Int) : [Ui] =
+  match opts {
+    []           -> []
+    [o, ...rest] -> [radio_row(o, i == cursor, i == chosen, focused), ...radio_rows(rest, cursor, chosen, focused, i + 1)]
+  }
+
+fn radio_row(lbl: String, on_cursor: Bool, is_chosen: Bool, focused: Bool) : Ui = {
+  let dot = if is_chosen { term.fg(83, "(o)") } else { term.fg(245, "( )") }
+  let txt = if on_cursor and focused { term.fg(220, lbl) } else { lbl }
+  ui.text(dot ++ " " ++ txt)
+}
+
+# ============================================================
+# Button — a label activated with Enter. `pressed` reports a press
+# for the app to act on (it does not hold lasting state).
+# ============================================================
+pub type Button = { label: String }
+
+pub fn button(label: String) : Button = Button { label: label }
+
+pub fn button_pressed(k: term.Key) : Bool =
+  match k {
+    Enter        -> true
+    Printable(c) -> c == ' '
+    _            -> false
+  }
+
+pub fn button_view(b: Button, focused: Bool) : Ui =
+  if focused {
+    ui.text(term.bg(44, term.fg(236, " " ++ b.label ++ " ")))
+  } else {
+    ui.text(term.fg(245, "[ " ++ b.label ++ " ]"))
+  }
+
+# ---- shared local helpers ----
+fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+fn count(xs: [a]) : Int =
+  match xs {
+    []           -> 0
+    [x, ...rest] -> 1 + count(rest)
+  }
+fn nth(xs: [String], i: Int, d: String) : String =
+  match xs {
+    []           -> d
+    [x, ...rest] -> if i == 0 { x } else { nth(rest, i - 1, d) }
+  }

@@ -1,0 +1,76 @@
+# terevaka/widget/menu.kai — a navigable list widget.
+#
+# Imported as `import terevaka.widget.menu`. A menu is the canonical
+# stateful-but-simple widget: it holds a list of item labels and a
+# cursor index. `update` moves the cursor on Up/Down (and j/k);
+# `view` renders the items with the selected one highlighted.
+#
+# This is a "Level 1.5" widget in the design's terms: it has state
+# (the cursor) but the state is a plain value threaded by the app,
+# not a fiber — the fiber/cell form is v0.2. The shape (State +
+# update + view) is exactly what each widget exposes.
+
+import terevaka.ui
+import terevaka.term
+
+pub type Menu = { items: [String], cursor: Int }
+
+pub fn init(items: [String]) : Menu = Menu { items: items, cursor: 0 }
+
+pub fn count(m: Menu) : Int = list_len(m.items)
+
+# the label of the currently-selected item ("" if empty)
+pub fn selected_label(m: Menu) : String = nth_or(m.items, m.cursor, "")
+
+pub fn selected(m: Menu) : Int = m.cursor
+
+# move the cursor; wraps around. Up/Down and j/k. Other keys: no-op.
+pub fn update(m: Menu, k: term.Key) : Menu =
+  match k {
+    Up           -> with_cursor(m, wrap(m.cursor - 1, count(m)))
+    Down         -> with_cursor(m, wrap(m.cursor + 1, count(m)))
+    Printable(c) -> if c == 'k' { with_cursor(m, wrap(m.cursor - 1, count(m))) }
+                    else { if c == 'j' { with_cursor(m, wrap(m.cursor + 1, count(m))) } else { m } }
+    _            -> m
+  }
+
+fn with_cursor(m: Menu, c: Int) : Menu = Menu { items: m.items, cursor: c }
+
+# view: each item a row; selected gets the highlight bar.
+pub fn view(m: Menu) : Ui = ui.col(rows(m.items, m.cursor, 0, item_width(m.items, 0)))
+
+fn rows(items: [String], cursor: Int, i: Int, w: Int) : [Ui] =
+  match items {
+    []           -> []
+    [x, ...rest] -> [item_row(x, i == cursor, w), ...rows(rest, cursor, i + 1, w)]
+  }
+
+fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
+  if sel {
+    ui.row([ ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ") ])
+  } else {
+    ui.row([ ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ") ])
+  }
+
+# widest item, for a uniform highlight bar
+fn item_width(items: [String], acc: Int) : Int =
+  match items {
+    []           -> acc
+    [x, ...rest] -> item_width(rest, max_int(acc, ui.visible_len(x)))
+  }
+
+# ---- tiny local helpers ----
+fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
+
+fn list_len(xs: [a]) : Int =
+  match xs {
+    []           -> 0
+    [x, ...rest] -> 1 + list_len(rest)
+  }
+
+fn nth_or(xs: [String], i: Int, d: String) : String =
+  match xs {
+    []           -> d
+    [x, ...rest] -> if i == 0 { x } else { nth_or(rest, i - 1, d) }
+  }

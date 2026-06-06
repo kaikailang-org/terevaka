@@ -1,0 +1,157 @@
+# examples/gallery/main.kai — a widget gallery showing the v0.2 set.
+#
+# A two-pane layout: a scrolling list on the left, a form (checkbox +
+# radio + button) on the right, a status bar at the bottom, and a
+# confirm dialog reachable from the button. Tab cycles focus between
+# the left list and the right form controls.
+#
+# Demonstrates: split-pane (multi-line Row), listbox (scroll), form
+# controls (checkbox/radio/button), statusbar, confirm overlay.
+#
+# Build: make gallery
+# Run:   ./build/gallery
+
+import terevaka.app
+import terevaka.ui
+import terevaka.term
+import terevaka.widget.listbox
+import terevaka.widget.form
+import terevaka.widget.statusbar
+import terevaka.widget.confirm
+
+# focus moves across: the list, then the 3 form controls
+type Focus = OnList | OnCheck | OnRadio | OnButton
+
+type Model = {
+  focus:   Focus,
+  files:   listbox.List,
+  notify:  form.Checkbox,
+  theme:   form.Radio,
+  save:    form.Button,
+  asking:  Bool,                 # confirm dialog open?
+  confirm: confirm.Confirm,
+  status:  String,
+  done:    Bool
+}
+
+fn initial() : Model = Model {
+  focus:   OnList,
+  files:   listbox.init(["main.kai","ui.kai","app.kai","term.kai","clock.kai","menu.kai","input.kai","popup.kai"], 5),
+  notify:  form.checkbox("Notifications", true),
+  theme:   form.radio(["Dark","Light","Auto"]),
+  save:    form.button("Save changes"),
+  asking:  false,
+  confirm: confirm.make("Save changes?"),
+  status:  "Tab: next field · Space/Enter: act · q: quit",
+  done:    false
+}
+
+# ---- update ----
+fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  if m.done { app.quit() }
+  else { if m.asking { update_confirm(m, k) }
+  else {
+    match k {
+      Printable(c) -> if c == 'q' { app.quit() } else { route(m, k) }
+      _            -> route(m, k)
+    }
+  } }
+
+# Tab cycles focus; anything else goes to the focused widget.
+fn route(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match k {
+    Tab -> app.keep(next_focus(m))
+    _   -> to_widget(m, k)
+  }
+
+fn to_widget(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match m.focus {
+    OnList   -> app.keep(set_files(m, listbox.update(m.files, k)))
+    OnCheck  -> app.keep(set_notify(m, form.checkbox_update(m.notify, k)))
+    OnRadio  -> app.keep(set_theme(m, form.radio_update(m.theme, k)))
+    OnButton -> if form.button_pressed(k) { app.keep(open_confirm(m)) } else { app.keep(m) }
+  }
+
+fn next_focus(m: Model) : Model =
+  set_focus(m, match m.focus {
+    OnList   -> OnCheck
+    OnCheck  -> OnRadio
+    OnRadio  -> OnButton
+    OnButton -> OnList
+  })
+
+fn open_confirm(m: Model) : Model =
+  Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
+          asking: true, confirm: confirm.make("Save changes?"), status: m.status, done: false }
+
+fn update_confirm(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match confirm.update(m.confirm, k) {
+    Pending(c) -> app.keep(Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme,
+                                   save: m.save, asking: true, confirm: c, status: m.status, done: false })
+    Yes        -> app.keep(close_confirm(m, "saved! theme=#{form.radio_chosen_label(m.theme)}"))
+    No         -> app.keep(close_confirm(m, "cancelled"))
+  }
+
+fn close_confirm(m: Model, status: String) : Model =
+  Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
+          asking: false, confirm: m.confirm, status: status, done: false }
+
+# ---- view: a split-pane + status bar ----
+fn view(m: Model) : Ui = {
+  let left  = listbox.view(m.files)
+  let right = ui.col([
+    form.checkbox_view(m.notify, focus_is(m, OnCheck)),
+    ui.blank(),
+    ui.muted("theme:"),
+    form.radio_view(m.theme, focus_is(m, OnRadio)),
+    ui.blank(),
+    form.button_view(m.save, focus_is(m, OnButton))
+  ])
+  ui.col([
+    ui.title("terevaka · widget gallery"),
+    ui.blank(),
+    ui.split(22, focus_tag(m, OnList, "Files"), left, 24, "Settings", right),
+    ui.blank(),
+    statusbar.view([
+      statusbar.hint("Tab", "next"),
+      statusbar.hint("Space/Enter", "act"),
+      statusbar.hint("q", "quit")
+    ]),
+    ui.muted(m.status)
+  ])
+}
+
+fn overlay(m: Model) : Option[Ui] =
+  if m.asking { Some(confirm.view(m.confirm)) } else { None }
+
+# ---- helpers ----
+fn focus_is(m: Model, f: Focus) : Bool = focus_eq(m.focus, f)
+fn focus_eq(a: Focus, b: Focus) : Bool =
+  match a {
+    OnList   -> match b { OnList -> true   OnCheck -> false  OnRadio -> false  OnButton -> false }
+    OnCheck  -> match b { OnList -> false  OnCheck -> true   OnRadio -> false  OnButton -> false }
+    OnRadio  -> match b { OnList -> false  OnCheck -> false  OnRadio -> true   OnButton -> false }
+    OnButton -> match b { OnList -> false  OnCheck -> false  OnRadio -> false  OnButton -> true }
+  }
+
+# the left panel title shows ▸ when the list is focused
+fn focus_tag(m: Model, f: Focus, base: String) : String =
+  if focus_is(m, f) { "▸ " ++ base } else { base }
+
+fn set_focus(m: Model, f: Focus) : Model =
+  Model { focus: f, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
+          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
+fn set_files(m: Model, l: listbox.List) : Model =
+  Model { focus: m.focus, files: l, notify: m.notify, theme: m.theme, save: m.save,
+          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
+fn set_notify(m: Model, c: form.Checkbox) : Model =
+  Model { focus: m.focus, files: m.files, notify: c, theme: m.theme, save: m.save,
+          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
+fn set_theme(m: Model, r: form.Radio) : Model =
+  Model { focus: m.focus, files: m.files, notify: m.notify, theme: r, save: m.save,
+          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
+
+fn main() : Int / Ffi = {
+  app.run_overlay(initial(), update, view, overlay, 200)
+  0
+}

@@ -1,0 +1,206 @@
+# examples/kanban/main.kai — a full-screen, editable kanban board on
+# terevaka.
+#
+# Five workflow columns (backlog / todo / doing / done / cancelled),
+# each a colored list of cards rendered as "[REF] <type-marker>" then
+# a title. The board fills the terminal (width and height derived from
+# term.cols / term.rows). Every kanban operation works:
+#   ← → / h l     switch active column
+#   ↑ ↓ / k j     move cursor within a column
+#   < >           MOVE the selected card to the prev/next column
+#   K J           reorder the selected card up/down in its column
+#   a             add a card (text input)
+#   d             delete the selected card (confirm)
+#   q             quit
+#
+# Demonstrates the board widget composing with input (add) and confirm
+# (delete), the multi-column full-screen layout, and a status/help bar.
+#
+# Build: make kanban   ·   Run: ./build/kanban
+
+import terevaka.app
+import terevaka.ui
+import terevaka.term
+import terevaka.widget.board
+import terevaka.widget.input
+import terevaka.widget.statusbar
+import terevaka.widget.confirm
+
+type Mode = Browse | Adding | Deleting
+
+type Model = {
+  mode:    Mode,
+  board:   board.Board,
+  field:   input.Input,
+  confirm: confirm.Confirm,
+  status:  String,
+  next_id: Int,
+  cols:    Int,
+  rows:    Int,
+  done:    Bool
+}
+
+# Number of workflow columns — used to split the terminal width.
+fn ncols() : Int = 5
+
+# Inner width of each column box, derived from the terminal width. The
+# paint origin is column 4 (app.kai), and the render model spends, per
+# column, `inner + 2` border columns plus a 1-cell gutter between
+# columns (N-1 of them). Solve for inner, with a readable floor.
+fn col_width(cols: Int) : Int = {
+  let n      = ncols()
+  let usable = cols - 4 - 2
+  let inner  = (usable - 2 * n - (n - 1)) / n
+  if inner < 12 { 12 } else { inner }
+}
+
+# Inner height each column stretches to: terminal rows minus the chrome
+# stacked by the view (origin + title + blank + blank + help + the
+# column box's own two borders), with a small floor.
+fn col_height(rows: Int) : Int = {
+  let chrome = 2 + 1 + 1 + 1 + 1
+  let inner  = rows - chrome - 2
+  if inner < 4 { 4 } else { inner }
+}
+
+fn initial(cols: Int, rows: Int) : Model = Model {
+  mode:  Browse,
+  board: board.init([
+    board.column("backlog",   244, [
+      board.card("TASK-12", Feature, "Capability audit from rows"),
+      board.card("TASK-15", Chore,   "Bump toolchain to latest")
+    ]),
+    board.column("todo",       75, [
+      board.card("TASK-3", Feature, "Repository as effect port"),
+      board.card("TASK-7", Bug,     "Fix unicode width counting"),
+      board.card("TASK-9", Task,    "Write the design doc")
+    ]),
+    board.column("doing",     220, [
+      board.card("TASK-1", Feature, "Kanban board widget")
+    ]),
+    board.column("done",       83, [
+      board.card("TASK-2", Feature, "Vertical fill layout"),
+      board.card("TASK-5", Chore,   "Flicker-free repaint")
+    ]),
+    board.column("cancelled", 240, [
+      board.card("TASK-8", Bug,     "Drop the legacy clone")
+    ])
+  ], col_width(cols), col_height(rows)),
+  field:   input.init(),
+  confirm: confirm.make("Delete this card?"),
+  status:  "< > move card · K J reorder · a add · d delete · q quit",
+  next_id: 16,
+  cols:    cols,
+  rows:    rows,
+  done:    false
+}
+
+# ---- update ----
+fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  if m.done { app.quit() }
+  else {
+    match m.mode {
+      Browse   -> update_browse(m, k)
+      Adding   -> update_adding(m, k)
+      Deleting -> update_deleting(m, k)
+    }
+  }
+
+fn update_browse(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match k {
+    Printable(c) -> browse_char(m, c)
+    _            -> app.keep(set_board(m, board.update(m.board, k)))   # ←→↑↓
+  }
+
+fn browse_char(m: Model, c: Char) : app.Step[Model] / Ffi =
+  if c == 'q' { app.quit() }
+  else { if c == '>' { app.keep(with_status(set_board(m, board.move_card_right(m.board)), "moved →")) }
+  else { if c == '<' { app.keep(with_status(set_board(m, board.move_card_left(m.board)), "moved ←")) }
+  else { if c == 'K' { app.keep(set_board(m, board.move_card_up(m.board))) }
+  else { if c == 'J' { app.keep(set_board(m, board.move_card_down(m.board))) }
+  else { if c == 'a' { app.keep(start_add(m)) }
+  else { if c == 'd' { app.keep(start_delete(m)) }
+  else { app.keep(set_board(m, board.update(m.board, Printable(c)))) } } } } } } }   # h/l/j/k
+
+fn start_add(m: Model) : Model =
+  Model { mode: Adding, board: m.board, field: input.focus(input.init()),
+          confirm: m.confirm, status: "type a card title · Enter add · Esc cancel",
+          next_id: m.next_id, cols: m.cols, rows: m.rows, done: false }
+
+fn start_delete(m: Model) : Model =
+  match board.selected_card(m.board) {
+    None    -> with_status(m, "nothing to delete")
+    Some(_) -> Model { mode: Deleting, board: m.board, field: m.field,
+                       confirm: confirm.make("Delete this card?"), status: m.status,
+                       next_id: m.next_id, cols: m.cols, rows: m.rows, done: false }
+  }
+
+fn update_adding(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match input.update(m.field, k) {
+    Editing(f) -> app.keep(Model { mode: Adding, board: m.board, field: f, confirm: m.confirm,
+                                   status: m.status, next_id: m.next_id, cols: m.cols, rows: m.rows, done: false })
+    Done(v)    -> app.keep(finish_add(m, v))
+    Cancelled  -> app.keep(with_status(browse(m), "add cancelled"))
+  }
+
+fn finish_add(m: Model, title: String) : Model =
+  if title == "" { with_status(browse(m), "empty card discarded") }
+  else {
+    let ref = "TASK-#{int_to_string(m.next_id)}"
+    let m2  = bump_id(set_board(browse(m), board.add_card(m.board, ref, title)))
+    with_status(m2, "added: #{title}")
+  }
+
+fn update_deleting(m: Model, k: term.Key) : app.Step[Model] / Ffi =
+  match confirm.update(m.confirm, k) {
+    Pending(c) -> app.keep(Model { mode: Deleting, board: m.board, field: m.field, confirm: c,
+                                   status: m.status, next_id: m.next_id, cols: m.cols, rows: m.rows, done: false })
+    Yes        -> app.keep(with_status(set_board(browse(m), board.remove_selected(m.board)), "deleted"))
+    No         -> app.keep(with_status(browse(m), "delete cancelled"))
+  }
+
+# ---- view ----
+fn view(m: Model) : Ui = {
+  ui.col([
+    ui.title("terevaka · kanban"),
+    ui.blank(),
+    board.view(m.board),
+    ui.blank(),
+    statusbar.view([
+      statusbar.hint("< >", "move"),
+      statusbar.hint("K J", "reorder"),
+      statusbar.hint("a", "add"),
+      statusbar.hint("d", "del"),
+      statusbar.hint("q", "quit")
+    ]),
+    ui.muted(m.status)
+  ])
+}
+
+fn overlay(m: Model) : Option[Ui] =
+  match m.mode {
+    Adding   -> Some(ui.box(36, "new card", input.view("title ", m.field)))
+    Deleting -> Some(confirm.view(m.confirm))
+    Browse   -> None
+  }
+
+# ---- helpers ----
+fn browse(m: Model) : Model =
+  Model { mode: Browse, board: m.board, field: m.field, confirm: m.confirm, status: m.status,
+          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
+fn set_board(m: Model, b: board.Board) : Model =
+  Model { mode: m.mode, board: b, field: m.field, confirm: m.confirm, status: m.status,
+          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
+fn with_status(m: Model, s: String) : Model =
+  Model { mode: m.mode, board: m.board, field: m.field, confirm: m.confirm, status: s,
+          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
+fn bump_id(m: Model) : Model =
+  Model { mode: m.mode, board: m.board, field: m.field, confirm: m.confirm, status: m.status,
+          next_id: m.next_id + 1, cols: m.cols, rows: m.rows, done: m.done }
+
+fn main() : Int / Ffi = {
+  let cols = term.cols()
+  let rows = term.rows()
+  app.run_overlay(initial(cols, rows), update, view, overlay, 200)
+  0
+}

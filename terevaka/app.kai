@@ -1,0 +1,192 @@
+# terevaka/app.kai — the application runtime.
+#
+# Imported as `import terevaka.app`. Drives the TEA-shaped loop:
+# the user provides an initial model, an `update(model, key) -> Step`
+# and a `view(model) -> Ui`; `run` owns raw mode, the poll/tick
+# input loop, painting, and clean teardown.
+#
+# Input is NON-BLOCKING (term.poll_key with a timeout) so a `Tick`
+# key arrives on idle and the view refreshes — letting a clock or
+# spinner advance without a keystroke. This is the spike's poll
+# bridge; the design's fiber form (input-pump fiber + widget cells
+# under a nursery) is v0.2, blocked on raw-mode-on-the-reactor.
+#
+# `run` is generic over the user's model type `m` via passed
+# functions — no HKT needed, just `(m, Key) -> Step[m]` and
+# `(m) -> Ui`.
+
+import terevaka.ui
+import terevaka.term
+
+# what an update decides: keep looping with a new model, or quit.
+pub type Step[m] = Continue(m) | Quit
+
+pub fn keep[m](model: m) : Step[m] = Continue(model)
+pub fn quit[m]() : Step[m] = Quit
+
+# Run the app. `tick_ms` is the idle poll timeout (lower = snappier
+# clock/animation, more CPU). 100-200 ms is a good default.
+# Row-polymorphic over `e`: the user's view/update carry whatever
+# effects they actually use (Clock for a live clock, or nothing), and
+# the runtime adds only Ffi + Spawn-free terminal IO. So a static app
+# needs no Clock, a live one declares it — the row flows through.
+pub fn run[m, e](
+  initial: m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  tick_ms: Int
+) : Unit / Ffi + e = {
+  term.raw_enable()
+  term.write(term.hide_cursor())
+  # Clear the screen ONCE on entry, so whatever was in the terminal
+  # before (the shell prompt, prior output) does not show through the
+  # margins. After this, the loop repaints in place (home + clear_eol,
+  # never a full ESC[2J) so there is no per-frame flicker — the initial
+  # clear gives a clean canvas, the in-place repaint keeps it flicker-free.
+  term.write(term.clear())
+  loop(initial, update, view, tick_ms)
+  term.write(term.show_cursor())
+  term.write(term.clear())
+  term.raw_disable()
+}
+
+# The loop threads the PREVIOUS frame (the painted line list) so it can
+# skip the repaint when nothing changed. The input poll returns a
+# synthetic `Tick` every `tick_ms` even with no keystroke; without this
+# guard the loop would clear-and-repaint the whole screen on every tick
+# (≈5×/s), which the terminal shows as flicker. By rendering to a line
+# list and comparing it to the last one, an idle tick that produces an
+# identical frame paints nothing. The first iteration passes a sentinel
+# empty frame so the initial view is always painted.
+fn loop[m, e](
+  model:   m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  tick_ms: Int
+) : Unit / Ffi + e = loop_framed(model, update, view, tick_ms, [], true)
+
+fn loop_framed[m, e](
+  model:   m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  tick_ms: Int,
+  prev:    [String],
+  first:   Bool
+) : Unit / Ffi + e = {
+  let frame = ui.render(view(model))
+  let painted = if first or not frames_eq(frame, prev) { paint_frame(frame); frame } else { prev }
+  let k = term.poll_key(tick_ms)
+  match update(model, k) {
+    Quit           -> ()
+    Continue(next) -> loop_framed(next, update, view, tick_ms, painted, false)
+  }
+}
+
+# structural equality of two painted frames (line lists)
+fn frames_eq(a: [String], b: [String]) : Bool =
+  match a {
+    []           -> match b { [] -> true   _ -> false }
+    [x, ...ra]   -> match b {
+      []         -> false
+      [y, ...rb] -> if x == y { frames_eq(ra, rb) } else { false }
+    }
+  }
+
+# paint: clear the screen, render the Ui to lines, and write each at
+# its row (offset a couple rows/cols in from the top-left).
+fn paint(u: Ui) : Unit / Ffi = paint_frame(ui.render(u))
+
+# paint an already-rendered frame (line list). Split out from `paint`
+# so the loop can render once, compare against the previous frame, and
+# only call this when they differ — see `loop_framed`.
+#
+# In-place repaint, NOT clear-then-draw: erasing the whole screen
+# (ESC[2J) before redrawing is what the terminal shows as a flash on
+# every repaint. Instead we home the cursor and overwrite each line,
+# erasing only to the end of each line (ESC[K) as we go — so the new
+# frame replaces the old cell-by-cell with no blank intermediate
+# state. A trailing ESC[J wipes any lines the previous (taller) frame
+# left below this one; for a full-screen board that never fires, but
+# it keeps a shrinking frame clean.
+fn paint_frame(lines: [String]) : Unit / Ffi = {
+  paint_lines(lines, 2, 4)
+  term.write(term.esc() ++ "[J")
+}
+
+fn paint_lines(lines: [String], row: Int, col: Int) : Unit / Ffi =
+  match lines {
+    []           -> ()
+    [l, ...rest] -> {
+      term.write(term.goto(row, col) ++ term.clear_eol() ++ l)
+      paint_lines(rest, row + 1, col)
+    }
+  }
+
+# ---- overlay compositing: paint a base Ui, then an overlay Ui on
+# top of it at (row, col). Used for modal popups. ----
+pub fn paint_with_overlay(base: Ui, overlay: Ui, orow: Int, ocol: Int) : Unit / Ffi = {
+  term.write(term.clear())
+  paint_lines(ui.render(base), 2, 4)
+  paint_lines(ui.render(overlay), orow, ocol)
+}
+
+# A run variant that also takes an overlay function: `overlay(model)`
+# returns `Some(ui)` to draw a modal on top, or `None`.
+pub fn run_overlay[m, e](
+  initial: m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  overlay: (m) -> Option[Ui] / e,
+  tick_ms: Int
+) : Unit / Ffi + e = {
+  term.raw_enable()
+  term.write(term.hide_cursor())
+  term.write(term.clear())   # clean canvas on entry (see `run`)
+  loop_overlay(initial, update, view, overlay, tick_ms)
+  term.write(term.show_cursor())
+  term.write(term.clear())
+  term.raw_disable()
+}
+
+fn loop_overlay[m, e](
+  model:   m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  overlay: (m) -> Option[Ui] / e,
+  tick_ms: Int
+) : Unit / Ffi + e = loop_overlay_framed(model, update, view, overlay, tick_ms, [], true)
+
+# Same idle-repaint guard as `loop_framed`, extended to the overlay
+# case. The frame signature is the base lines followed by the overlay
+# lines (with a separator marker so a base line and an overlay line
+# can never alias); identical signature on a tick ⇒ no repaint, no
+# flicker. When it differs, we repaint via the same two-layer path.
+fn loop_overlay_framed[m, e](
+  model:   m,
+  update:  (m, term.Key) -> Step[m] / Ffi + e,
+  view:    (m) -> Ui / e,
+  overlay: (m) -> Option[Ui] / e,
+  tick_ms: Int,
+  prev:    [String],
+  first:   Bool
+) : Unit / Ffi + e = {
+  let base = view(model)
+  let base_lines = ui.render(base)
+  # the separator is an unlikely sentinel line so a base line and an
+  # overlay line can never coincidentally alias across the boundary
+  let sig = match overlay(model) {
+    None     -> base_lines
+    Some(ov) -> base_lines ++ ["#{int_to_char(1)}ovl"] ++ ui.render(ov)
+  }
+  let painted = if first or not frames_eq(sig, prev) {
+    match overlay(model) {
+      None     -> paint(base)
+      Some(ov) -> paint_with_overlay(base, ov, 6, 16)
+    }
+    sig
+  } else { prev }
+  match update(model, term.poll_key(tick_ms)) {
+    Quit           -> ()
+    Continue(next) -> loop_overlay_framed(next, update, view, overlay, tick_ms, painted, false)
+  }
+}

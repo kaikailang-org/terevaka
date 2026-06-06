@@ -1,0 +1,102 @@
+# terevaka/widget/list.kai — a scrolling, navigable list.
+#
+# Imported as `import terevaka.widget.list`. Like menu, but it shows
+# a VIEWPORT of `height` rows and scrolls when the list is longer than
+# the viewport — the cursor stays visible, the window follows it.
+# This is what menu becomes when the list outgrows the screen.
+
+import terevaka.ui
+import terevaka.term
+
+pub type List = { items: [String], cursor: Int, offset: Int, height: Int }
+
+# `height` is how many rows the viewport shows at once.
+pub fn init(items: [String], height: Int) : List =
+  List { items: items, cursor: 0, offset: 0, height: height }
+
+pub fn selected(l: List) : Int = l.cursor
+pub fn selected_label(l: List) : String = nth(l.items, l.cursor, "")
+
+pub fn update(l: List, k: term.Key) : List =
+  match k {
+    Up           -> move(l, -1)
+    Down         -> move(l, 1)
+    Printable(c) -> if c == 'k' { move(l, -1) } else { if c == 'j' { move(l, 1) } else { l } }
+    _            -> l
+  }
+
+# move the cursor by d, wrapping, then scroll the viewport to keep
+# the cursor visible.
+fn move(l: List, d: Int) : List = {
+  let n = count(l.items)
+  let cur = wrap(l.cursor + d, n)
+  scroll_to(List { items: l.items, cursor: cur, offset: l.offset, height: l.height })
+}
+
+# adjust offset so cursor is within [offset, offset+height)
+fn scroll_to(l: List) : List = {
+  let off =
+    if l.cursor < l.offset { l.cursor }                              # scrolled above → snap up
+    else { if l.cursor >= l.offset + l.height { l.cursor - l.height + 1 }  # below → snap down
+    else { l.offset } }                                              # already visible
+  List { items: l.items, cursor: l.cursor, offset: off, height: l.height }
+}
+
+# view: the visible window of items, selected one highlighted, plus a
+# scroll indicator (▲/▼) when there's more above/below.
+pub fn view(l: List) : Ui = {
+  let n = count(l.items)
+  let w = item_width(l.items, 0)
+  let visible = slice_items(l.items, l.offset, l.height)
+  let rows = render_rows(visible, l.cursor, l.offset, w)
+  ui.col(rows ++ [scroll_hint(l.offset, l.height, n)])
+}
+
+fn render_rows(items: [String], cursor: Int, base: Int, w: Int) : [Ui] =
+  match items {
+    []           -> []
+    [x, ...rest] -> [item_row(x, base == cursor, w), ...render_rows(rest, cursor, base + 1, w)]
+  }
+
+fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
+  if sel {
+    ui.row([ ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ") ])
+  } else {
+    ui.row([ ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ") ])
+  }
+
+fn scroll_hint(offset: Int, height: Int, n: Int) : Ui = {
+  let up   = if offset > 0 { "▲" } else { " " }
+  let down = if offset + height < n { "▼" } else { " " }
+  ui.label(245, "  #{up} #{down}  #{offset + 1}-#{min_int(offset + height, n)}/#{n}")
+}
+
+# ---- helpers ----
+fn slice_items(items: [String], start: Int, len: Int) : [String] =
+  if len <= 0 { [] } else {
+    match items {
+      []           -> []
+      [x, ...rest] -> if start > 0 { slice_items(rest, start - 1, len) }
+                      else { [x, ...slice_items(rest, 0, len - 1)] }
+    }
+  }
+
+fn item_width(items: [String], acc: Int) : Int =
+  match items {
+    []           -> acc
+    [x, ...rest] -> item_width(rest, max_int(acc, ui.visible_len(x)))
+  }
+
+fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
+fn min_int(a: Int, b: Int) : Int = if a <= b { a } else { b }
+fn count(xs: [a]) : Int =
+  match xs {
+    []           -> 0
+    [x, ...rest] -> 1 + count(rest)
+  }
+fn nth(xs: [String], i: Int, d: String) : String =
+  match xs {
+    []           -> d
+    [x, ...rest] -> if i == 0 { x } else { nth(rest, i - 1, d) }
+  }
