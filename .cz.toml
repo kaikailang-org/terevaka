@@ -1,0 +1,12 @@
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "scm"
+tag_format = "v$version"
+version_files = ["kai.toml:^version"]
+bump_message = "release: v$new_version"
+major_version_zero = true
+
+# The CHANGELOG is hand-curated (Keep a Changelog prose, not
+# commit-subject bullets), so cz does not touch it on bump: promote
+# the [Unreleased] section manually before running `cz bump`.
+update_changelog_on_bump = false
