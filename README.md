@@ -78,7 +78,7 @@ fn main() : Int / Ffi + Clock = {
 | Module | What it is |
 |---|---|
 | `terevaka.term` | The terminal layer: raw mode, non-blocking key reads (assembles arrow keys), no-newline writes, ANSI builders, geometry. The only module carrying `Ffi`. |
-| `terevaka.ui` | The `Ui` value tree (`Text`/`Row`/`Col`/`Box`/`Pad`) + `render(Ui) : [String]`. Pure: building and rendering a view is effect-free, so views are testable by structural equality. `Box` takes an inner width *and* an inner height (`box_filled`, 0 = auto) so panels can fill the screen. `visible_len` measures true display columns — it decodes each UTF-8 codepoint and adds its width (2 for emoji/CJK/fullwidth, 1 otherwise), skipping ANSI codes — a local `display_width` since kaikai's stdlib lacks one. |
+| `terevaka.ui` | The `Ui` value tree (`Text`/`Row`/`Col`/`Box`/`Pad`) + `render(Ui) : [String]`. Pure: building and rendering a view is effect-free, so views are testable by structural equality. `Box` takes an inner width *and* an inner height (`box_filled`, 0 = auto) so panels can fill the screen. `visible_len` measures true display columns: it skips ANSI codes and sums `text.char_width` over the remaining codepoints (2 for emoji/CJK/fullwidth, 0 for combining marks, 1 otherwise). |
 | `terevaka.app` | The Model/update/view runtime. `run` and `run_overlay` (for modals). Non-blocking poll loop so a clock/spinner advances on idle. **Flicker-free**: clears once on entry, then repaints in place (cursor home + erase-to-end-of-line per row, never a whole-screen clear per frame) and only when the rendered frame actually changes. |
 | `terevaka.clock` | `hhmmss_utc()` — a tiny clock helper over the `Clock` effect. |
 | `terevaka.widget.menu` | A navigable list: cursor, Up/Down + j/k, highlighted selection. |
@@ -138,16 +138,14 @@ a real interactive app.
 
 ## Known limitations
 
-- **Wide-glyph width is an approximation.** `visible_len` decodes each
-  UTF-8 codepoint and assigns width 2 to the common wide ranges (emoji,
-  CJK, fullwidth) and 1 otherwise — enough for the box/arrow set and
-  the glyphs the widgets use, but **not** a full Unicode width table
-  (zero-width/combining marks, regional-indicator pairs, and emoji ZWJ
-  sequences are out of scope). The real fix is `string.display_width`
-  upstream — filed as kaikai #745 (depends on #744, the String/Char
-  byte-vs-codepoint model). terevaka's `visible_len` is the interim
-  local approximation. (The bundled examples sidestep the question by
-  using ASCII type markers.)
+- **Width is measured per codepoint, not per grapheme cluster.**
+  `visible_len` delegates to the stdlib's `text.char_width`, so the
+  East Asian Width table and zero-width marks are handled. What remains
+  out of scope is UAX #29 segmentation: an emoji ZWJ sequence, a flag,
+  or a skin-tone modifier renders as one wide glyph but is measured as
+  its parts. That limit is the stdlib's, and closing it belongs
+  upstream. (The bundled examples sidestep the question by using ASCII
+  type markers.)
 - **No real per-widget concurrency.** Widgets are value state machines
   threaded by the app, not fibers (see *What's a value vs deferred*).
   The clock/spinner tick via the poll loop; a spinner *during a real

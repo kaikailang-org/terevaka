@@ -16,6 +16,7 @@
 
 import terevaka.term
 import core.string
+import text
 
 # ---- Style: a small set of attributes a Text can carry. ----
 pub type Style =
@@ -65,23 +66,21 @@ pub fn split(lw: Int, lt: String, left: Ui, rw: Int, rt: String, right: Ui) : Ui
 # Row engine handles any N. Used by the kanban board.
 pub fn columns(panels: [Ui]) : Ui = Row(panels)
 
-# ---- Visible-width measurement. `string.chars` returns BYTES (a
-# multi-byte UTF-8 glyph like ▸ is 3 "chars"), and ANSI color codes
-# add invisible bytes — so neither string.length nor a naive char
-# count gives display columns. This counts VISIBLE columns by:
-#   - skipping ESC '[' ... 'm' color sequences entirely, and
-#   - decoding each UTF-8 codepoint from its lead byte (+ continuation
-#     bytes) and adding its DISPLAY WIDTH — 2 for wide glyphs (emoji,
-#     CJK), 1 otherwise.
+# ---- Visible-width measurement. Neither `string.length` nor a
+# codepoint count gives display columns: wide glyphs (emoji, CJK,
+# fullwidth) occupy two, combining marks occupy none, and ANSI color
+# codes occupy none while still being part of the string.
 #
-# Why decode, not just count lead bytes: emoji are 2 terminal columns
-# wide but a naive "one column per codepoint" undercounts them by one
-# each, which pushes a box's right border out by one cell per emoji on
-# the line (the bug that breaks the kanban borders). kaikai has no
-# `display_width` in the stdlib (issue #745), so terevaka carries this
-# local approximation. It covers the common wide ranges (emoji + CJK
-# + a few symbol blocks); it is NOT a full Unicode width table, and
-# zero-width / combining marks are out of scope (a v0.2 concern).
+# The per-codepoint half is `text.char_width` (the East Asian Width
+# table). What the stdlib deliberately leaves to the caller is the
+# escape sequences — `text.display_width` measures the codepoints it
+# is given — so terevaka keeps the ANSI-skipping wrapper and delegates
+# the width itself.
+#
+# Why width and not a plain count: an emoji is 2 terminal columns, so
+# counting one column per codepoint undercounts it by one and pushes a
+# box's right border out by one cell per emoji on the line (the bug
+# that breaks the kanban borders).
 pub fn visible_len(s: String) : Int = vis_loop(string.chars(s), false, 0)
 
 fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
@@ -91,54 +90,26 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
       if in_esc {
         if c == 'm' { vis_loop(rest, false, acc) } else { vis_loop(rest, true, acc) }
       } else {
-        let b = char_to_int(c)
-        if b == 27 { vis_loop(rest, true, acc) }                       # ESC: start color seq
-        else { if b < 128 { vis_loop(rest, false, acc + 1) }           # ASCII: 1 column
-        else { if b >= 240 { decode_advance(rest, 3, b - 240, in_esc, acc) }   # 4-byte lead (11110xxx)
-        else { if b >= 224 { decode_advance(rest, 2, b - 224, in_esc, acc) }   # 3-byte lead (1110xxxx)
-        else { if b >= 192 { decode_advance(rest, 1, b - 192, in_esc, acc) }   # 2-byte lead (110xxxxx)
-        else { vis_loop(rest, false, acc) } } } } }                    # stray continuation: skip
+        let cp = char_to_int(c)
+        if cp == 27 { vis_loop(rest, true, acc) }              # ESC: start color seq
+        else { vis_loop(rest, false, acc + text.char_width(cp)) }
       }
   }
 
-# Consume `n` continuation bytes, folding them into the codepoint `cp`
-# accumulated from the lead byte's payload, then add the glyph's
-# display width and resume the outer loop.
-fn decode_advance(cs: [Char], n: Int, cp: Int, in_esc: Bool, acc: Int) : Int =
-  if n <= 0 { vis_loop(cs, in_esc, acc + char_width(cp)) }
-  else {
-    match cs {
-      []           -> acc + char_width(cp)                  # truncated UTF-8; count what we have
-      [c, ...rest] -> {
-        let b = char_to_int(c)
-        # continuation byte (10xxxxxx): low 6 bits extend the codepoint
-        if b >= 128 and b <= 191 { decode_advance(rest, n - 1, cp * 64 + (b - 128), in_esc, acc) }
-        else { vis_loop(cs, in_esc, acc + char_width(cp)) }  # malformed: stop folding
-      }
-    }
-  }
+test "visible_len — display columns, not codepoints" {
+  assert visible_len("hello") == 5
+  assert visible_len("▸ Edit") == 6          # arrow is narrow
+  assert visible_len("你好") == 4             # 2 wide codepoints
+  assert visible_len("🎉") == 2               # wide emoji, not 1
+  assert visible_len("你▸🎉a") == 6
+  assert visible_len("") == 0
+}
 
-# Display width of a Unicode codepoint: 2 for the common wide ranges
-# (emoji + CJK + fullwidth + a few symbol blocks), else 1. Mirrors the
-# East-Asian-Width "W"/"F" buckets enough for the glyphs the widgets
-# use; not a complete table.
-fn char_width(cp: Int) : Int =
-  if cp >= 0x1F300 and cp <= 0x1FAFF { 2 }        # emoji & pictographs
-  else { if cp >= 0x1F000 and cp <= 0x1F0FF { 2 } # mahjong/dominoes/cards
-  else { if cp >= 0x2600 and cp <= 0x27BF { 2 }   # misc symbols + dingbats
-  else { if cp >= 0x2B00 and cp <= 0x2BFF { 2 }   # misc symbols & arrows (stars etc.)
-  else { if cp >= 0x1100 and cp <= 0x115F { 2 }   # Hangul Jamo
-  else { if cp >= 0x2E80 and cp <= 0x303E { 2 }   # CJK radicals .. punctuation
-  else { if cp >= 0x3041 and cp <= 0x33FF { 2 }   # Hiragana .. CJK compat
-  else { if cp >= 0x3400 and cp <= 0x4DBF { 2 }   # CJK ext A
-  else { if cp >= 0x4E00 and cp <= 0x9FFF { 2 }   # CJK unified
-  else { if cp >= 0xA000 and cp <= 0xA4CF { 2 }   # Yi
-  else { if cp >= 0xAC00 and cp <= 0xD7A3 { 2 }   # Hangul syllables
-  else { if cp >= 0xF900 and cp <= 0xFAFF { 2 }   # CJK compat ideographs
-  else { if cp >= 0xFE30 and cp <= 0xFE4F { 2 }   # CJK compat forms
-  else { if cp >= 0xFF00 and cp <= 0xFF60 { 2 }   # fullwidth forms
-  else { if cp >= 0xFFE0 and cp <= 0xFFE6 { 2 }   # fullwidth signs
-  else { 1 } } } } } } } } } } } } } } }
+test "visible_len — ANSI sequences occupy no columns" {
+  assert visible_len(term.fg(31, "red")) == 3
+  assert visible_len(term.bold(term.fg(31, "red"))) == 3
+  assert visible_len(term.fg(31, "🎉")) == 2
+}
 
 # ---- helpers ----
 pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
@@ -160,19 +131,28 @@ pub fn truncate(s: String, width: Int) : String = {
   else { take_cols(string.chars(s), width - 1, 0, "") ++ "…" }
 }
 
-# take the first `n` visible columns (codepoints) of a char/byte list,
-# skipping UTF-8 continuation bytes so multi-byte glyphs stay whole.
+# take the first `n` visible columns of a codepoint list. A glyph is
+# taken whole or not at all: a 2-column glyph that would straddle the
+# limit is dropped, so the result never exceeds `n` columns.
 fn take_cols(cs: [Char], n: Int, taken: Int, acc: String) : String =
   match cs {
     []           -> acc
-    [c, ...rest] ->
-      if taken >= n { acc }
-      else {
-        let b = char_to_int(c)
-        if b >= 128 and b <= 191 { take_cols(rest, n, taken, acc ++ "#{c}") }  # continuation: keep, don't count
-        else { take_cols(rest, n, taken + 1, acc ++ "#{c}") }
-      }
+    [c, ...rest] -> {
+      let w = text.char_width(char_to_int(c))
+      if taken + w > n { acc }
+      else { take_cols(rest, n, taken + w, acc ++ "#{c}") }
+    }
   }
+
+test "truncate / cell — measured and cut in columns" {
+  assert truncate("hello", 10) == "hello"
+  assert visible_len(truncate("hello world", 8)) == 8
+  # a wide glyph is never cut in half: the ellipsis takes one column,
+  # so an odd budget leaves a column the next emoji cannot fill.
+  assert visible_len(truncate("🎉🎉🎉", 5)) == 3
+  assert visible_len(cell("你好世界", 5)) == 5
+  assert visible_len(cell("ab", 6)) == 6
+}
 
 # fit-or-truncate: ensure exactly `width` columns (truncate if long,
 # pad if short).
