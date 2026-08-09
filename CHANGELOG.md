@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [0.1.2] - 2026-08-09
+
+### Fixed
+
+- **`truncate` cut multibyte text wrong on kai 0.109.2 and earlier.**
+  `take_cols` rebuilds the kept prefix with `"#{c}"`, and interpolating
+  a multibyte `Char` produced mis-encoded bytes, so a truncated string
+  carrying emoji or CJK came out corrupted. kai 0.110.0 fixes the
+  encoding upstream (#1671, "encode Show for Char output as UTF-8") and
+  nothing in terevaka had to change — but the 0.1.1 test suite had
+  frozen the broken behaviour as expected (`truncate("🎉🎉🎉", 5)`
+  asserted 3 columns where the correct answer is 5, two whole emoji
+  plus the ellipsis). The assertion is corrected and the case pinned by
+  string equality rather than width alone.
+
+### Changed
+
+- **Tests move to `terevaka/ui_test.kai`.** Since 0.110.0 package mode
+  runs every `*_test.kai` a package owns whether or not anything
+  imports it, while `test` blocks inside a module the entry graph does
+  not reach are only warned about. `make test` now loops over
+  `*_test.kai`, so covering another module is a matter of adding a file.
+- **The stated compiler version is now 0.110.0**, verified by
+  rebuilding every example and the spike from clean.
+
+### Known issue
+
+- Package mode still cannot run a library's tests: every spec resolves
+  the manifest entry (`main.kai`) before discovery, so `kai test` errors
+  and `kai test ./...` reports `SKIP terevaka (.) (no main.kai)` and
+  exits 1. Filed upstream as kaikai #1718; `make test` is the workaround
+  and stays until it closes.
+
 ## [0.1.1] - 2026-08-09
 
 ### Fixed

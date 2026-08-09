@@ -1,0 +1,38 @@
+# Tests for terevaka/ui.kai — the pure half of the framework, so
+# everything here is plain value comparison with no terminal involved.
+#
+# A separate `*_test.kai` rather than blocks inside `ui.kai`: package
+# mode discovers test files by that name and runs them whether or not
+# anything imports them, while `test` blocks in a module the entry
+# graph does not reach are only warned about.
+
+import terevaka.ui
+import terevaka.term
+
+test "visible_len — display columns, not codepoints" {
+  assert ui.visible_len("hello") == 5
+  assert ui.visible_len("▸ Edit") == 6          # arrow is narrow
+  assert ui.visible_len("你好") == 4             # 2 wide codepoints
+  assert ui.visible_len("🎉") == 2               # wide emoji, not 1
+  assert ui.visible_len("你▸🎉a") == 6
+  assert ui.visible_len("") == 0
+}
+
+test "visible_len — ANSI sequences occupy no columns" {
+  assert ui.visible_len(term.fg(31, "red")) == 3
+  assert ui.visible_len(term.bold(term.fg(31, "red"))) == 3
+  assert ui.visible_len(term.fg(31, "🎉")) == 2
+}
+
+test "truncate / cell — measured and cut in columns" {
+  assert ui.truncate("hello", 10) == "hello"
+  assert ui.visible_len(ui.truncate("hello world", 8)) == 8
+  # The ellipsis costs one column, leaving width-1 for the text. A wide
+  # glyph is taken whole or not at all, so a budget that ends mid-glyph
+  # stops one column short rather than splitting it.
+  assert ui.truncate("🎉🎉🎉", 5) == "🎉🎉…"      # 4 columns of text + 1
+  assert ui.visible_len(ui.truncate("🎉🎉🎉", 5)) == 5
+  assert ui.visible_len(ui.truncate("🎉🎉🎉", 4)) == 3   # only one fits
+  assert ui.visible_len(ui.cell("你好世界", 5)) == 5
+  assert ui.visible_len(ui.cell("ab", 6)) == 6
+}

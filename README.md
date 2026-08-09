@@ -8,7 +8,7 @@ web, terevaka is for the terminal.
 > terminal layer (with robust size detection), eight widgets (menu,
 > listbox, input, form, popup, confirm, statusbar, board), and a
 > Model/update/view runtime with a flicker-free in-place repaint all
-> compile and run on `kai 0.109.2`. The full-screen kanban example
+> compile and run on `kai 0.110.0`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget a supervised `ahu.cell`) is
 > **v0.2**, blocked on raw-mode-on-the-reactor upstream — see
@@ -161,7 +161,7 @@ the way `kohau` binds libsqlite3. `kai build` does not inject link
 flags, so the `Makefile` passes the shim through `CFLAGS`: the header
 via `-include`, the source as a plain translation unit the driver
 hands to the C compiler. Requirements: `kai` on `PATH` (verified
-against 0.109.2), a C compiler.
+against 0.110.0), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
@@ -171,9 +171,13 @@ make test       # the framework's own tests
 make clean
 ```
 
-`make test` runs `kai test` per module rather than package-wide:
-terevaka is a library with no entry point, and a bare `kai test`
-resolves the manifest's default entry (`main.kai`) and fails.
+Tests live in `*_test.kai` files beside the module they cover, and
+`make test` runs `kai test` once per file. Package mode would discover
+them on its own — since 0.110.0 it runs every `*_test.kai` a package
+owns, imported or not — but it refuses to start here: terevaka is a
+library with no entry point, and every package-mode spec resolves the
+manifest's entry (`main.kai`) first. `kai test ./...` reports
+`SKIP terevaka (.) (no main.kai)` and exits 1.
 
 ## Using terevaka as a dependency
 

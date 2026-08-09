@@ -96,21 +96,6 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
       }
   }
 
-test "visible_len — display columns, not codepoints" {
-  assert visible_len("hello") == 5
-  assert visible_len("▸ Edit") == 6          # arrow is narrow
-  assert visible_len("你好") == 4             # 2 wide codepoints
-  assert visible_len("🎉") == 2               # wide emoji, not 1
-  assert visible_len("你▸🎉a") == 6
-  assert visible_len("") == 0
-}
-
-test "visible_len — ANSI sequences occupy no columns" {
-  assert visible_len(term.fg(31, "red")) == 3
-  assert visible_len(term.bold(term.fg(31, "red"))) == 3
-  assert visible_len(term.fg(31, "🎉")) == 2
-}
-
 # ---- helpers ----
 pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
 pub fn spaces(n: Int) : String = repeat(" ", n)
@@ -143,16 +128,6 @@ fn take_cols(cs: [Char], n: Int, taken: Int, acc: String) : String =
       else { take_cols(rest, n, taken + w, acc ++ "#{c}") }
     }
   }
-
-test "truncate / cell — measured and cut in columns" {
-  assert truncate("hello", 10) == "hello"
-  assert visible_len(truncate("hello world", 8)) == 8
-  # a wide glyph is never cut in half: the ellipsis takes one column,
-  # so an odd budget leaves a column the next emoji cannot fill.
-  assert visible_len(truncate("🎉🎉🎉", 5)) == 3
-  assert visible_len(cell("你好世界", 5)) == 5
-  assert visible_len(cell("ab", 6)) == 6
-}
 
 # fit-or-truncate: ensure exactly `width` columns (truncate if long,
 # pad if short).

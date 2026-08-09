@@ -51,13 +51,20 @@ run-gallery: gallery
 run-kanban: kanban
 	./$(BUILD)/kanban
 
-# The framework's own tests. Per-module rather than package-wide:
-# terevaka is a library with no entry point, and `kai test` with no
-# argument resolves the manifest's default entry (main.kai) and fails.
-# The shim rides in CFLAGS here too — the modules under test import
-# terevaka.term, which is Ffi.
+# The framework's own tests, one `kai test` per file. Package mode
+# would find these on its own (it discovers *_test.kai whether or not
+# anything imports them), but it refuses to run at all here: terevaka
+# is a library with no entry point, and every package-mode spec wants
+# the manifest's entry (main.kai) to exist first. The shim rides in
+# CFLAGS too — the modules under test import terevaka.term, which is
+# Ffi.
+TEST_SRC := $(wildcard terevaka/*_test.kai) $(wildcard terevaka/widget/*_test.kai)
+
 test:
-	CFLAGS="$(KAI_CFLAGS)" $(KAI_BIN) test terevaka/ui.kai
+	@set -e; for t in $(TEST_SRC); do \
+	  echo "== $$t"; \
+	  CFLAGS="$(KAI_CFLAGS)" $(KAI_BIN) test $$t; \
+	done
 
 clean:
 	rm -rf $(BUILD)
