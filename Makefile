@@ -19,7 +19,7 @@ TVK_SRC := $(wildcard terevaka/*.kai) $(wildcard terevaka/widget/*.kai)
 
 SHIM_SRC := c/terevaka_term.c c/terevaka_term.h
 
-.PHONY: all example gallery kanban run run-gallery run-kanban clean
+.PHONY: all example gallery kanban run run-gallery run-kanban test clean
 
 all: example gallery kanban
 
@@ -50,6 +50,14 @@ run-gallery: gallery
 
 run-kanban: kanban
 	./$(BUILD)/kanban
+
+# The framework's own tests. Per-module rather than package-wide:
+# terevaka is a library with no entry point, and `kai test` with no
+# argument resolves the manifest's default entry (main.kai) and fails.
+# The shim rides in CFLAGS here too — the modules under test import
+# terevaka.term, which is Ffi.
+test:
+	CFLAGS="$(KAI_CFLAGS)" $(KAI_BIN) test terevaka/ui.kai
 
 clean:
 	rm -rf $(BUILD)

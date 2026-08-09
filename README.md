@@ -8,7 +8,7 @@ web, terevaka is for the terminal.
 > terminal layer (with robust size detection), eight widgets (menu,
 > listbox, input, form, popup, confirm, statusbar, board), and a
 > Model/update/view runtime with a flicker-free in-place repaint all
-> compile and run on `kai 0.86.1`. The full-screen kanban example
+> compile and run on `kai 0.109.2`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget a supervised `ahu.cell`) is
 > **v0.2**, blocked on raw-mode-on-the-reactor upstream — see
@@ -161,14 +161,50 @@ the way `kohau` binds libsqlite3. `kai build` does not inject link
 flags, so the `Makefile` passes the shim through `CFLAGS`: the header
 via `-include`, the source as a plain translation unit the driver
 hands to the C compiler. Requirements: `kai` on `PATH` (verified
-against 0.107.0), a C compiler.
+against 0.109.2), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
 make run        # build + run the demo
 make run-kanban # build + run the kanban board
+make test       # the framework's own tests
 make clean
 ```
+
+`make test` runs `kai test` per module rather than package-wide:
+terevaka is a library with no entry point, and a bare `kai test`
+resolves the manifest's default entry (`main.kai`) and fails.
+
+## Using terevaka as a dependency
+
+`kai add github.com/kaikailang-org/terevaka` resolves the import, but
+that is not enough to link: the C shim is not part of the package as
+far as `kai build` is concerned, so the build fails with undefined
+`kai_tvk_*` symbols. The consumer passes the shim in `CFLAGS` the same
+way this repo does, pointing at the copy inside the package cache:
+
+```make
+# Package cache root. `kai` honours $KAIKAI_CACHE; the default is
+# ~/Library/Caches/kai/pkg on macOS, ~/.cache/kai/pkg on Linux.
+KAIKAI_CACHE ?= $(HOME)/Library/Caches/kai/pkg
+
+TVK_SHA  := $(shell awk '/^name = "terevaka"/{f=1} f && /^sha = /{gsub(/[",]/,"",$$3); print $$3; exit}' kai.lock)
+TVK_ROOT := $(KAIKAI_CACHE)/github.com/kaikailang-org/terevaka/$(TVK_SHA)
+KAI_CFLAGS := -std=c99 -O2 -include $(TVK_ROOT)/c/terevaka_term.h $(TVK_ROOT)/c/terevaka_term.c
+
+build/app: $(SRC) kai.lock
+	mkdir -p build
+	CFLAGS="$(KAI_CFLAGS)" kai build . -o $@
+```
+
+Two details that bite. Derive the sha from `kai.lock` rather than
+hardcoding the path — a hardcoded one breaks on the next `kai update`.
+And give `KAIKAI_CACHE` a default: the variable is not exported unless
+you set it, so a recipe that reads it bare expands to an empty prefix
+and the include path silently points at `/github.com/...`.
+
+If `kai build` ever grows a way for a package to declare its own link
+inputs, that supersedes all of this.
 
 ## Layout
 
