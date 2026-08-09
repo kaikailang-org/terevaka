@@ -1,4 +1,4 @@
-# Build output — kaic2-generated C, linked binaries, shim objects.
+# Build output — linked binaries, generated C, shim objects.
 build/
 spike/build/
 *.o
@@ -6,6 +6,9 @@ spike/build/
 # Generated C and raw capture artifacts from the spike.
 spike/c/*.o
 *.raw
+
+# Compiler module cache, written beside the package manifest.
+**/.kai-cache/
 
 # Package lock (path/git deps resolved per-checkout; terevaka has none
 # in v0.1, but keep this for when ahu arrives in v0.2).

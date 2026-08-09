@@ -7,7 +7,7 @@ edition = "hanga-roa"
 # terevaka v0.1 has no kaikai-package dependencies. It binds the
 # terminal through a C shim (c/terevaka_term.{c,h}) the way kohau
 # binds libsqlite3 — `kai build` does not inject link flags, so the
-# build is driven by the Makefile (kaic2 emits C, cc links the shim).
+# build is driven by the Makefile, which passes the shim in CFLAGS.
 # The ahu dependency (cells / restart for the fiber architecture)
 # arrives in v0.2 once raw-mode-on-reactor unblocks the input pump.
 

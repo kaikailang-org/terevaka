@@ -155,7 +155,7 @@ does **not** yet use the fiber architecture in `../docs/design.md`:
 ```
 spike/
 ├── README.md            # this file
-├── Makefile             # shim → kaic2 emit C → cc link (kohau pattern)
+├── Makefile             # shim in CFLAGS → kai build (kohau pattern)
 ├── demo.kai             # the TUI: Key, view, update, the loop
 └── c/
     ├── tui_shim.c       # termios raw mode + key read + no-newline write

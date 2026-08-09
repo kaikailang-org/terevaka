@@ -9,7 +9,7 @@
 #
 # This is a SPIKE. It proves the terminal surface terevaka needs is
 # reachable today (raw mode + keys + ANSI render + a concurrent
-# clock) on kai 0.84.0 with a thin C shim. It does NOT yet use the
+# clock) on kai 0.107.0 with a thin C shim. It does NOT yet use the
 # fiber/nursery architecture from ../docs/design.md: here the clock
 # ticks via a poll/timeout loop, not a render fiber + input-pump
 # fiber + widget cells. Raw-mode-on-the-reactor (which would let the

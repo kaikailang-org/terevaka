@@ -160,8 +160,10 @@ a real interactive app.
 
 terevaka binds the terminal through a C shim (`c/terevaka_term.{c,h}`)
 the way `kohau` binds libsqlite3. `kai build` does not inject link
-flags, so the `Makefile` drives `kaic2` (emit C) then `cc` (link the
-shim). Requirements: `kai` 0.86.1+ on `PATH`, a C compiler.
+flags, so the `Makefile` passes the shim through `CFLAGS`: the header
+via `-include`, the source as a plain translation unit the driver
+hands to the C compiler. Requirements: `kai` on `PATH` (verified
+against 0.107.0), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
@@ -175,7 +177,7 @@ make clean
 ```
 terevaka/
 ├── kai.toml
-├── Makefile                  # shim → kaic2 → cc
+├── Makefile                  # shim in CFLAGS → kai build
 ├── docs/design.md            # the architecture (incl. the fiber v0.2 plan)
 ├── c/terevaka_term.{c,h}     # terminal shim (raw mode, poll, write, size)
 ├── terevaka/                 # the importable modules
