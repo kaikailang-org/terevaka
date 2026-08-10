@@ -33,6 +33,10 @@ test "truncate / cell — measured and cut in columns" {
   assert ui.truncate("🎉🎉🎉", 5) == "🎉🎉…"      # 4 columns of text + 1
   assert ui.visible_len(ui.truncate("🎉🎉🎉", 5)) == 5
   assert ui.visible_len(ui.truncate("🎉🎉🎉", 4)) == 3   # only one fits
+  # budget 6 is the interesting boundary: two emoji plus the ellipsis
+  # need 5, and the third cannot fit in the column left over.
+  assert ui.truncate("🎉🎉🎉", 6) == "🎉🎉🎉"            # 6 columns exactly, no cut
+  assert ui.visible_len(ui.truncate("🎉🎉🎉🎉", 6)) == 5
   assert ui.visible_len(ui.cell("你好世界", 5)) == 5
   assert ui.visible_len(ui.cell("ab", 6)) == 6
 }
