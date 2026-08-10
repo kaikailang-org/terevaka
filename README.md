@@ -122,17 +122,27 @@ app** — *not yet* as fibers.
 
 Why: the design's headline is "every live concurrent task is a
 supervised fiber", which needs the input pump to be a fiber parked on
-the reactor. But the kaikai reactor parks *line-buffered* stdin
-(`Stdin.read_line`), while a TUI needs *raw byte-at-a-time* reads.
-**Raw-mode-on-the-reactor is a stdlib gap.** Until it closes, a
-blocking raw read would freeze the whole scheduler (measured — see
-`spike/README.md`), so v0.1 uses a non-blocking `poll()` loop in one
-fiber. The *effect* the design promises (a clock that ticks without
-input, concurrent panels) is reachable — the clock demo proves it —
+the reactor. When v0.1 was written that was a stdlib gap — a blocking
+raw read froze the whole scheduler (measured — see `spike/README.md`)
+— so v0.1 uses a non-blocking `poll()` loop in one fiber instead. The
+*effect* the design promises (a clock that ticks without input,
+concurrent panels) is reachable that way — the clock demo proves it —
 but via poll, not fibers.
 
-v0.2, once the reactor gap closes: widgets become `ahu.cell`s, the
-input pump and render become sibling fibers under a nursery, and the
+**That gap has since closed upstream.** The reactor's stdin phase
+shipped (kaikai #620, under the #474 parent), and a fiber blocked on
+`Stdin.read_bytes` now parks instead of freezing the scheduler —
+verified on kai 0.111.0 with a reader fiber and a ticker fiber, where
+the ticker kept running while the reader waited on input that never
+came.
+
+One measurement is still owed before v0.2 starts: that check ran with
+stdin on a pipe, not on a TTY in raw mode. termios governs the driver's
+line discipline rather than the fd-readiness path the reactor watches,
+so the mechanism should carry over, but "should" is not "measured".
+
+v0.2, once that is confirmed: widgets become `ahu.cell`s, the input
+pump and render become sibling fibers under a nursery, and the
 spinner-during-task pattern (verified in `docs/design.md`) wires into
 a real interactive app.
 
