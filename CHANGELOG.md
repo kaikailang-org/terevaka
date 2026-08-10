@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
-## [Unreleased]
+## [0.1.3] - 2026-08-10
 
 ### Changed
 
@@ -36,6 +36,15 @@ the surface is pre-1.0 (every release may break shape).
   lifted the entry-point requirement for libraries (#1721, filed from
   here as #1718), so `kai test` and `kai test ./...` both work without
   the manifest naming an entry that a library does not have.
+
+### Known issue
+
+- `|` will not unify an unannotated stage that applies a list-generic
+  to a list element — `blocks | (b) => list.length(b)` is rejected
+  while `list.map` with the same lambda compiles. Filed upstream as
+  kaikai #1743; the point-free section (`blocks | .length()`) is both
+  the workaround and the form the idiomatic guide prefers, so nothing
+  here is left waiting on it.
 
 ## [0.1.2] - 2026-08-09
 
