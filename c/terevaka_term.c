@@ -53,25 +53,39 @@ int64_t kai_tvk_raw_disable(void) {
     return 0;
 }
 
-/* Poll stdin up to `timeout_ms`. Returns the byte 0..255 on input,
- * -1 on timeout (no input — lets a loop tick a clock), -2 on EOF/
- * error. This is the spike's poll bridge: the terevaka design wants
- * input parked on the kaikai reactor as a fiber, but the reactor
- * parks line-buffered Stdin only — raw byte reads on the reactor are
- * a stdlib gap, so poll() is the honest interim. */
+/* Poll stdin up to `timeout_ms`. Returns:
+ *     0..255  the byte read
+ *     -1      timeout, no input (lets a loop tick a clock)
+ *     -2      end of input: stdin is closed and never yields again
+ *     -3      poll/read error
+ *
+ * EOF is its own code because it is not recoverable: poll() reports a
+ * closed descriptor as ready forever, so a caller that treats it as
+ * "nothing I recognise" spins at full speed with no way out. The
+ * caller must stop reading on -2.
+ *
+ * This is the spike's poll bridge: the terevaka design wants input
+ * parked on the kaikai reactor as a fiber. The reactor's stdin phase
+ * has since shipped, but whether it carries raw byte-at-a-time reads
+ * on a tty is unmeasured — until it is, poll() is the honest interim. */
 int64_t kai_tvk_poll_key(int64_t timeout_ms) {
     struct pollfd pfd;
     pfd.fd = STDIN_FILENO;
     pfd.events = POLLIN;
     int r = poll(&pfd, 1, (int) timeout_ms);
     if (r == 0) return -1;
-    if (r < 0)  return -2;
+    if (r < 0)  return -3;
     if (pfd.revents & POLLIN) {
         unsigned char c;
         ssize_t n = read(STDIN_FILENO, &c, 1);
         if (n == 1) return (int64_t) c;
+        if (n == 0) return -2;          /* read past end of input */
+        return -3;
     }
-    return -2;
+    /* Ready but not readable: a hangup on the write end is end of
+     * input just the same. */
+    if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) return -2;
+    return -3;
 }
 
 /* Write a NUL-terminated string to stdout WITHOUT a trailing

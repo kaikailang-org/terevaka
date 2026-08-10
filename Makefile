@@ -60,11 +60,21 @@ run-kanban: kanban
 # Ffi.
 TEST_SRC := $(wildcard terevaka/*_test.kai) $(wildcard terevaka/widget/*_test.kai)
 
-test:
+test: test-eof
 	@set -e; for t in $(TEST_SRC); do \
 	  echo "== $$t"; \
 	  CFLAGS="$(KAI_CFLAGS)" $(KAI_BIN) test $$t; \
 	done
+
+# Regression for the EOF spin: a closed stdin polls ready forever, so
+# an app that treats end-of-input as an unrecognised key never blocks
+# and never exits. Not a `kai test` case — it needs a real process with
+# its stdin closed. The alarm is the whole point: on regression the
+# demo never returns, so without it this target would hang CI.
+test-eof: $(BUILD)/demo
+	@perl -e 'alarm 5; exec @ARGV' ./$(BUILD)/demo < /dev/null > /dev/null 2>&1 \
+	  && echo "== eof: app exits on closed stdin" \
+	  || { echo "FAIL: app did not exit on closed stdin (spinning?)"; exit 1; }
 
 clean:
 	rm -rf $(BUILD)

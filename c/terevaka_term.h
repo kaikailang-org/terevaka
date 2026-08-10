@@ -7,6 +7,8 @@
 
 int64_t kai_tvk_raw_enable(void);
 int64_t kai_tvk_raw_disable(void);
+/* byte 0..255 | -1 timeout | -2 end of input | -3 error.
+ * -2 is terminal: stop reading, or spin on a dead descriptor. */
 int64_t kai_tvk_poll_key(int64_t timeout_ms);
 int64_t kai_tvk_write(const char *s);
 int64_t kai_tvk_term_rows(void);

@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Fixed
+
+- **End of input no longer spins the loop at full CPU.** `poll(2)`
+  reports a closed descriptor as ready forever, and `term.poll_key`
+  mapped end-of-input to `Unknown` — the same value it returns for any
+  byte it does not decode. Most apps answer `Unknown` with
+  `keep(model)`, so `app.run` re-polled a dead descriptor with no delay
+  and no keystroke could ever arrive: only SIGKILL ended it. Measured
+  at 138% CPU before the fix, exiting in 0.10s after.
+
+  It reaches ordinary setups — `cat doc.md | app`, an ssh session whose
+  terminal goes away, a parent that exits.
+
+  The shim was part of the problem: `-2` meant EOF, a `poll` error, and
+  "ready but not readable" all at once. It now returns `-2` only for
+  end of input and `-3` for errors, and reports a hangup on the write
+  end as end of input too. Both loops (`run` and `run_overlay`) end on
+  `Eof` in the runtime rather than leaving it to the app, since an app
+  that ignores it burns a core.
+
+### Changed
+
+- **BREAKING: `term.Key` gains an `Eof` variant.** An exhaustive
+  `match` over `Key` in a downstream app stops compiling until it
+  handles (or wildcards) the new case. Apps driven by `app.run` need no
+  change beyond that: the runtime ends the loop on `Eof` before
+  `update` is called.
+- **`make test` now runs `test-eof` first**, a regression that starts
+  the demo with a closed stdin under a five-second alarm. It cannot be
+  a `kai test` case — it needs a real process whose stdin is closed —
+  and the alarm is load-bearing: on regression the app never returns.
+- **The README no longer calls v0.2 blocked.** The upstream reactor gap
+  closed; the remaining gate is measuring raw byte-at-a-time reads on a
+  TTY, which the two stale mentions now point at instead.
+
 ## [0.1.3] - 2026-08-10
 
 ### Changed

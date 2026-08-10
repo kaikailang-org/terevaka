@@ -41,34 +41,41 @@ pub fn cols() : Int / Ffi = kai_tvk_term_cols()
 #[doc("""
 The byte stream from the terminal, assembled into logical keys.
 
-`Tick` is synthetic: it is returned when a poll times out with no
-input, so an app loop can refresh — and advance a clock — while idle.
-`Unknown` covers both an unrecognised sequence and a read error.
+Two of these are not keystrokes. `Tick` is returned when a poll times
+out with no input, so an app loop can refresh — and advance a clock —
+while idle. `Eof` means stdin is closed and will never yield again: it
+MUST end the loop, because a closed descriptor polls ready forever and
+a loop that treats it as an unrecognised key spins at full speed with
+no way out. `Unknown` is the recoverable case — a sequence this layer
+does not decode, or a read error — and is safe to ignore.
 """)]
 pub type Key =
   Up | Down | Left | Right
   | Enter | Backspace | Esc | Tab
   | Printable(Char)
   | Tick
+  | Eof
   | Unknown
 
 #[doc("""
 Poll for one key, waiting at most `ms` milliseconds.
 
 Returns `Tick` when the wait elapses with no input, which is what lets
-an app loop stay responsive while idle. Arrow keys arrive as the
-3-byte ESC '[' 'A'..'D' sequence and are assembled here, so a caller
-sees `Up` rather than three bytes.
+an app loop stay responsive while idle, and `Eof` when stdin is closed
+— a caller that keeps polling after `Eof` spins on a dead descriptor.
+Arrow keys arrive as the 3-byte ESC '[' 'A'..'D' sequence and are
+assembled here, so a caller sees `Up` rather than three bytes.
 """)]
 pub fn poll_key(ms: Int) : Key / Ffi = match kai_tvk_poll_key(ms) {
   -1  -> Tick
+  -2  -> Eof
   27  -> escape_seq()
   13  -> Enter
   10  -> Enter
   9   -> Tab
   127 -> Backspace
   8   -> Backspace
-  b if b < 0   -> Unknown
+  b if b < 0   -> Unknown          # -3: read error, recoverable
   b if b >= 32 -> Printable(int_to_char(b))
   _   -> Unknown
 }

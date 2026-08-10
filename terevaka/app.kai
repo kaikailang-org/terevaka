@@ -85,10 +85,17 @@ fn loop_framed[m, e](
 ) : Unit / Ffi + e = {
   let frame = ui.render(view(model))
   let painted = if first or not frames_eq(frame, prev) { paint_frame(frame); frame } else { prev }
-  let k = term.poll_key(tick_ms)
-  match update(model, k) {
-    Quit           -> ()
-    Continue(next) -> loop_framed(next, update, view, tick_ms, painted, false)
+  match term.poll_key(tick_ms) {
+    # End of input: stdin is closed, so no keystroke can ever arrive
+    # and a closed descriptor polls ready forever. Leaving this to the
+    # app would spin the loop at full speed on a dead fd, so the
+    # runtime ends the loop itself — the app still gets its teardown
+    # from `run`, which restores the terminal either way.
+    Eof -> ()
+    k   -> match update(model, k) {
+             Quit           -> ()
+             Continue(next) -> loop_framed(next, update, view, tick_ms, painted, false)
+           }
   }
 }
 
@@ -207,8 +214,11 @@ fn loop_overlay_framed[m, e](
     }
     sig
   } else { prev }
-  match update(model, term.poll_key(tick_ms)) {
-    Quit           -> ()
-    Continue(next) -> loop_overlay_framed(next, update, view, overlay, tick_ms, painted, false)
+  match term.poll_key(tick_ms) {
+    Eof -> ()                        # see loop_framed: EOF ends the loop
+    k   -> match update(model, k) {
+             Quit           -> ()
+             Continue(next) -> loop_overlay_framed(next, update, view, overlay, tick_ms, painted, false)
+           }
   }
 }

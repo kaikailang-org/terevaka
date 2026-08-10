@@ -11,8 +11,9 @@ web, terevaka is for the terminal.
 > compile and run on `kai 0.111.0`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget a supervised `ahu.cell`) is
-> **v0.2**, blocked on raw-mode-on-the-reactor upstream — see
-> §*What's a value vs what's deferred*.
+> **v0.2**. The upstream blocker (raw-mode-on-the-reactor) has since
+> closed; what remains is one measurement — see §*What's a value vs
+> what's deferred*.
 
 The name is the highest volcano of Rapa Nui — the point from which
 you see the whole island. The metaphor: a TUI is the vantage from
@@ -160,7 +161,8 @@ a real interactive app.
   threaded by the app, not fibers (see *What's a value vs deferred*).
   The clock/spinner tick via the poll loop; a spinner *during a real
   in-flight request*, a live `tail -f`, or panels at independent rates
-  need the fiber architecture — v0.2, blocked on raw-mode-on-reactor.
+  need the fiber architecture — v0.2, whose upstream blocker has closed
+  and which now waits on one measurement (see the section above).
 - **No mouse, no resize handling (`SIGWINCH`).** Keyboard-first.
 - **UTC clock only** (no localtime in stdlib yet).
 
