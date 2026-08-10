@@ -39,26 +39,33 @@ pub type Key =
 
 # Poll for one key, waiting at most `ms`. Arrow keys arrive as the
 # 3-byte ESC '[' 'A'/'B'/'C'/'D' sequence and are read byte-by-byte.
-pub fn poll_key(ms: Int) : Key / Ffi = {
-  let b = kai_tvk_poll_key(ms)
-  if b == -1 { Tick }
-  else { if b < 0 { Unknown }
-  else { if b == 27 {
-    let b2 = kai_tvk_poll_key(20)
-    if b2 == 91 {
-      match kai_tvk_poll_key(20) {
-        65 -> Up   66 -> Down   67 -> Right   68 -> Left   _ -> Unknown
-      }
-    } else { Esc }
-  } else {
-    match b {
-      13 -> Enter   10 -> Enter
-      9 -> Tab
-      127 -> Backspace   8 -> Backspace
-      _ -> if b >= 32 { Printable(int_to_char(b)) } else { Unknown }
-    }
-  } } }
+# -1 is the poll timeout; any other negative is a read error.
+pub fn poll_key(ms: Int) : Key / Ffi = match kai_tvk_poll_key(ms) {
+  -1  -> Tick
+  27  -> escape_seq()
+  13  -> Enter
+  10  -> Enter
+  9   -> Tab
+  127 -> Backspace
+  8   -> Backspace
+  b if b < 0   -> Unknown
+  b if b >= 32 -> Printable(int_to_char(b))
+  _   -> Unknown
 }
+
+# ESC arrived: it either opens an arrow sequence ('[' then 'A'..'D')
+# or stands alone as the Esc key. The follow-up bytes are already in
+# the buffer, so a short poll suffices.
+fn escape_seq() : Key / Ffi =
+  if kai_tvk_poll_key(20) == 91 {
+    match kai_tvk_poll_key(20) {
+      65 -> Up
+      66 -> Down
+      67 -> Right
+      68 -> Left
+      _  -> Unknown
+    }
+  } else { Esc }
 
 # ---- Raw output ----
 pub fn write(s: String) : Unit / Ffi = { let _ = kai_tvk_write(s); () }

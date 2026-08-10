@@ -25,10 +25,13 @@ pub fn update(c: Confirm, k: term.Key) : Answer =
     _            -> Pending(c)
   }
 
-fn nav_char(c: Confirm, ch: Char) : Answer =
-  if ch == 'h' { Pending(Confirm { question: c.question, on_yes: true }) }
-  else { if ch == 'l' { Pending(Confirm { question: c.question, on_yes: false }) }
-  else { if ch == 'y' { Yes } else { if ch == 'n' { No } else { Pending(c) } } } }
+fn nav_char(c: Confirm, ch: Char) : Answer = match ch {
+  'h' -> Pending(Confirm { question: c.question, on_yes: true })
+  'l' -> Pending(Confirm { question: c.question, on_yes: false })
+  'y' -> Yes
+  'n' -> No
+  _   -> Pending(c)
+}
 
 pub fn view(c: Confirm) : Ui = {
   let yes = if c.on_yes  { term.bg(83, term.fg(236, " Yes ")) } else { term.fg(245, " Yes ") }

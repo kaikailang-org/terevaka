@@ -29,8 +29,11 @@ pub fn update(m: Menu, k: term.Key) : Menu =
   match k {
     Up           -> with_cursor(m, wrap(m.cursor - 1, count(m)))
     Down         -> with_cursor(m, wrap(m.cursor + 1, count(m)))
-    Printable(c) -> if c == 'k' { with_cursor(m, wrap(m.cursor - 1, count(m))) }
-                    else { if c == 'j' { with_cursor(m, wrap(m.cursor + 1, count(m))) } else { m } }
+    Printable(c) -> match c {
+                      'k' -> with_cursor(m, wrap(m.cursor - 1, count(m)))
+                      'j' -> with_cursor(m, wrap(m.cursor + 1, count(m)))
+                      _   -> m
+                    }
     _            -> m
   }
 
@@ -60,7 +63,11 @@ fn item_width(items: [String], acc: Int) : Int =
   }
 
 # ---- tiny local helpers ----
-fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+fn wrap(i: Int, n: Int) : Int = match i {
+  x if x < 0  -> n - 1
+  x if x >= n -> 0
+  x           -> x
+}
 fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
 
 fn list_len(xs: [a]) : Int =

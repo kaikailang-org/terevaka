@@ -76,11 +76,13 @@ pub fn update(b: Board, k: term.Key) : Board =
     _            -> b
   }
 
-fn nav_char(b: Board, c: Char) : Board =
-  if c == 'h' { switch_col(b, -1) }
-  else { if c == 'l' { switch_col(b, 1) }
-  else { if c == 'k' { move_cursor(b, -1) }
-  else { if c == 'j' { move_cursor(b, 1) } else { b } } } }
+fn nav_char(b: Board, c: Char) : Board = match c {
+  'h' -> switch_col(b, -1)
+  'l' -> switch_col(b, 1)
+  'k' -> move_cursor(b, -1)
+  'j' -> move_cursor(b, 1)
+  _   -> b
+}
 
 fn switch_col(b: Board, d: Int) : Board =
   Board { columns: b.columns, active: wrap(b.active + d, count(b.columns)), width: b.width, height: b.height }
@@ -190,8 +192,11 @@ fn card_lines(c: Card, on_cursor: Bool, active_col: Bool, w: Int) : [Ui] = {
   # ++-concatenated with the String marker — that is the concat-mismatch.)
   let head = term.fg(44, "[#{c.ref}]") ++ " " ++ kind_marker(c.kind)
   let txt  = ui.cell(c.title, w - 4)
-  let title = if sel { Text(Selected(44), txt) }
-              else { if on_cursor { ui.label(245, txt) } else { Text(Dim, txt) } }
+  let title = match (sel, on_cursor) {
+    (true, _)      -> Text(Selected(44), txt)   # selected wins over cursor
+    (false, true)  -> ui.label(245, txt)
+    (false, false) -> Text(Dim, txt)
+  }
   [ui.text(head), title]
 }
 
@@ -247,7 +252,12 @@ fn nth_card(cards: [Card], i: Int) : Option[Card] =
     [c, ...rest] -> if i == 0 { Some(c) } else { nth_card(rest, i - 1) }
   }
 
-fn wrap(i: Int, n: Int) : Int = if n <= 0 { 0 } else { if i < 0 { n - 1 } else { if i >= n { 0 } else { i } } }
+fn wrap(i: Int, n: Int) : Int = match i {
+  _ if n <= 0 -> 0
+  x if x < 0  -> n - 1
+  x if x >= n -> 0
+  x           -> x
+}
 fn count(xs: [a]) : Int =
   match xs {
     []           -> 0

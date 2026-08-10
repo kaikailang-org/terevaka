@@ -48,9 +48,12 @@ pub fn radio_update(r: Radio, k: term.Key) : Radio =
   match k {
     Up           -> move_cursor(r, -1)
     Down         -> move_cursor(r, 1)
-    Printable(c) -> if c == 'k' { move_cursor(r, -1) }
-                    else { if c == 'j' { move_cursor(r, 1) }
-                    else { if c == ' ' { choose(r) } else { r } } }
+    Printable(c) -> match c {
+                      'k' -> move_cursor(r, -1)
+                      'j' -> move_cursor(r, 1)
+                      ' ' -> choose(r)
+                      _   -> r
+                    }
     Enter        -> choose(r)
     _            -> r
   }
@@ -98,7 +101,11 @@ pub fn button_view(b: Button, focused: Bool) : Ui =
   }
 
 # ---- shared local helpers ----
-fn wrap(i: Int, n: Int) : Int = if i < 0 { n - 1 } else { if i >= n { 0 } else { i } }
+fn wrap(i: Int, n: Int) : Int = match i {
+  x if x < 0  -> n - 1
+  x if x >= n -> 0
+  x           -> x
+}
 fn count(xs: [a]) : Int =
   match xs {
     []           -> 0

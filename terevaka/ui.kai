@@ -266,10 +266,10 @@ fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = 
 # spaces) on purpose — box_body fits every line to the inner width and
 # adds the colored borders, so an empty body line becomes a properly
 # bordered blank row without us duplicating the width/color work here.
-fn fit_height(lines: [String], h: Int) : [String] = {
-  let n = len_of(lines)
-  if n == h { lines }
-  else { if n > h { take_lines(lines, h) } else { lines ++ blank_lines(h - n) } }
+fn fit_height(lines: [String], h: Int) : [String] = match len_of(lines) {
+  n if n == h -> lines
+  n if n > h  -> take_lines(lines, h)
+  n           -> lines ++ blank_lines(h - n)
 }
 
 fn take_lines(lines: [String], n: Int) : [String] =
