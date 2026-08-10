@@ -21,15 +21,30 @@ extern "C" fn kai_tvk_term_rows() : Int / Ffi
 extern "C" fn kai_tvk_term_cols() : Int / Ffi
 
 # ---- Lifecycle ----
+#[doc("""
+Put the terminal into raw mode: no line buffering, no echo, so keys
+arrive one byte at a time. Pair every call with `raw_disable`, or the
+shell is left unusable after the program exits.
+""")]
 pub fn raw_enable() : Unit / Ffi = { let _ = kai_tvk_raw_enable(); () }
+
+#[doc("Restore the terminal settings saved by `raw_enable`.")]
 pub fn raw_disable() : Unit / Ffi = { let _ = kai_tvk_raw_disable(); () }
+
+#[doc("The terminal height in rows, from the shim's window-size query.")]
 pub fn rows() : Int / Ffi = kai_tvk_term_rows()
+
+#[doc("The terminal width in columns, from the shim's window-size query.")]
 pub fn cols() : Int / Ffi = kai_tvk_term_cols()
 
 # ---- Keys ----
-# The byte stream from the terminal, assembled into logical keys.
-# `Tick` is synthetic: returned when a poll times out with no input,
-# so an app loop can refresh (and advance a clock) while idle.
+#[doc("""
+The byte stream from the terminal, assembled into logical keys.
+
+`Tick` is synthetic: it is returned when a poll times out with no
+input, so an app loop can refresh — and advance a clock — while idle.
+`Unknown` covers both an unrecognised sequence and a read error.
+""")]
 pub type Key =
   Up | Down | Left | Right
   | Enter | Backspace | Esc | Tab
@@ -37,9 +52,14 @@ pub type Key =
   | Tick
   | Unknown
 
-# Poll for one key, waiting at most `ms`. Arrow keys arrive as the
-# 3-byte ESC '[' 'A'/'B'/'C'/'D' sequence and are read byte-by-byte.
-# -1 is the poll timeout; any other negative is a read error.
+#[doc("""
+Poll for one key, waiting at most `ms` milliseconds.
+
+Returns `Tick` when the wait elapses with no input, which is what lets
+an app loop stay responsive while idle. Arrow keys arrive as the
+3-byte ESC '[' 'A'..'D' sequence and are assembled here, so a caller
+sees `Up` rather than three bytes.
+""")]
 pub fn poll_key(ms: Int) : Key / Ffi = match kai_tvk_poll_key(ms) {
   -1  -> Tick
   27  -> escape_seq()
@@ -68,29 +88,60 @@ fn escape_seq() : Key / Ffi =
   } else { Esc }
 
 # ---- Raw output ----
+#[doc("""
+Write `s` to the terminal with no trailing newline.
+
+The no-newline part is the point: a TUI positions text with `goto`,
+and a stray newline would scroll the screen out from under the frame.
+""")]
 pub fn write(s: String) : Unit / Ffi = { let _ = kai_tvk_write(s); () }
 
 # ---- ANSI escape builders (pure String functions; no Ffi) ----
-# ESC is byte 27, interpolated as a Char so no literal-escape needed.
+#[doc("The ESC character (byte 27) that opens every ANSI sequence.")]
 pub fn esc() : String = "#{int_to_char(27)}"
 
+#[doc("Erase the whole screen and home the cursor.")]
 pub fn clear() : String = "#{esc()}[2J#{esc()}[H"
-# Move the cursor to the top-left WITHOUT erasing the screen. Used by
-# the in-place repaint path: overwriting every cell with the new frame
-# avoids the whole-screen erase (ESC[2J) that the terminal shows as a
-# flash on each repaint. Pair with `clear_eol` per line so a shorter
-# new line erases the tail of the old one.
+
+#[doc("""
+Move the cursor to the top-left WITHOUT erasing the screen.
+
+This is the in-place repaint path: overwriting every cell with the new
+frame avoids the whole-screen erase (`clear`) that a terminal shows as
+a flash on each repaint. Pair it with `clear_eol` per line, so a
+shorter new line erases the tail of the old one.
+""")]
 pub fn home() : String = "#{esc()}[H"
-# Erase from the cursor to the end of the current line (ESC[K).
+
+#[doc("Erase from the cursor to the end of the current line.")]
 pub fn clear_eol() : String = "#{esc()}[K"
+
+#[doc("Position the cursor. Rows and columns are 1-based, as ANSI counts them.")]
 pub fn goto(row: Int, col: Int) : String = "#{esc()}[#{row};#{col}H"
+
+#[doc("Hide the cursor — a TUI draws its own, so the real one only flickers.")]
 pub fn hide_cursor() : String = "#{esc()}[?25l"
+
+#[doc("Show the cursor again. Always pair with `hide_cursor` before exit.")]
 pub fn show_cursor() : String = "#{esc()}[?25h"
 
-# 256-color foreground / background + attributes, wrapping `s` and
-# resetting after. Composing two is fine — each resets only itself.
+#[doc("""
+Wrap `s` in a 256-color foreground, resetting after.
+
+Composing colour with an attribute is fine — each wrapper resets only
+itself — but note that the reset ends ALL attributes, so the outer
+wrapper must be applied last.
+""")]
 pub fn fg(code: Int, s: String) : String = "#{esc()}[38;5;#{code}m#{s}#{esc()}[0m"
+
+#[doc("Wrap `s` in a 256-color background, resetting after.")]
 pub fn bg(code: Int, s: String) : String = "#{esc()}[48;5;#{code}m#{s}#{esc()}[0m"
+
+#[doc("Render `s` bold.")]
 pub fn bold(s: String) : String = "#{esc()}[1m#{s}#{esc()}[0m"
+
+#[doc("Render `s` dim — the framework's convention for secondary text.")]
 pub fn dim(s: String) : String = "#{esc()}[2m#{s}#{esc()}[0m"
+
+#[doc("Swap foreground and background for `s`.")]
 pub fn invert(s: String) : String = "#{esc()}[7m#{s}#{esc()}[0m"

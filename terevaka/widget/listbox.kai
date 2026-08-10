@@ -9,15 +9,26 @@ import terevaka.ui
 import terevaka.term
 import math.int
 
+#[doc("""
+A scrolling list: the items, the cursor, and the viewport (`offset` is
+the first visible row, `height` how many fit).
+""")]
 pub type List = { items: [String], cursor: Int, offset: Int, height: Int }
 
 # `height` is how many rows the viewport shows at once.
+#[doc("A list over `items` showing `height` rows at a time.")]
 pub fn init(items: [String], height: Int) : List =
   List { items: items, cursor: 0, offset: 0, height: height }
 
+#[doc("The cursor index, absolute in the item list — not relative to the viewport.")]
 pub fn selected(l: List) : Int = l.cursor
+#[doc("The selected item's label, or the empty string when there are none.")]
 pub fn selected_label(l: List) : String = list.nth(l.items, l.cursor).unwrap_or("")
 
+#[doc("""
+Move the cursor with Up/Down or k/j, wrapping at both ends, and scroll
+the viewport to keep it visible.
+""")]
 pub fn update(l: List, k: term.Key) : List =
   match k {
     Up           -> move(l, -1)
@@ -46,6 +57,10 @@ fn scroll_to(l: List) : List = {
 
 # view: the visible window of items, selected one highlighted, plus a
 # scroll indicator (▲/▼) when there's more above/below.
+#[doc("""
+Render the visible window plus a scroll hint (`▲`/`▼` and an
+`n-m/total` counter), so the block is always `height + 1` lines.
+""")]
 pub fn view(l: List) : Ui = {
   let n = list.length(l.items)
   let w = item_width(l.items)

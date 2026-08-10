@@ -8,13 +8,26 @@
 import terevaka.ui
 import terevaka.term
 
-pub type Confirm = { question: String, on_yes: Bool }   # on_yes = is "Yes" highlighted
+#[doc("A yes/no dialog: the question, and which button is highlighted.")]
+pub type Confirm = { question: String, on_yes: Bool }
 
+#[doc("""
+What a key did to the dialog: still open (with its new state), or
+answered.
+
+`Pending` carries the updated `Confirm` so the app threads it back;
+`Yes`/`No` are terminal — the app acts and drops the dialog.
+""")]
 pub type Answer = Pending(Confirm) | Yes | No
 
+#[doc("A dialog for `question`, defaulting to Yes highlighted.")]
 pub fn make(question: String) : Confirm =
   Confirm { question: question, on_yes: true }      # defaults to Yes highlighted
 
+#[doc("""
+Apply a key: h/l or Left/Right move the highlight, Enter answers with
+it, y/n answer directly, Esc is No.
+""")]
 pub fn update(c: Confirm, k: term.Key) : Answer =
   match k {
     Left         -> Pending(Confirm { question: c.question, on_yes: true })
@@ -33,6 +46,7 @@ fn nav_char(c: Confirm, ch: Char) : Answer = match ch {
   _   -> Pending(c)
 }
 
+#[doc("Render the question with the Yes/No buttons, the highlighted one filled.")]
 pub fn view(c: Confirm) : Ui = {
   let yes = if c.on_yes  { term.bg(83, term.fg(236, " Yes ")) } else { term.fg(245, " Yes ") }
   let no  = if c.on_yes  { term.fg(245, " No ") }  else { term.bg(210, term.fg(236, " No ")) }

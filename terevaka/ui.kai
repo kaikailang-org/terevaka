@@ -19,6 +19,13 @@ import core.string
 import text
 
 # ---- Style: a small set of attributes a Text can carry. ----
+#[doc("""
+The attributes a `Text` node can carry.
+
+Deliberately a closed set rather than arbitrary ANSI: a style is
+resolved to escape codes only at render time, so a `Ui` stays a
+comparable value.
+""")]
 pub type Style =
   Plain
   | Fg(Int)            # 256-color foreground
@@ -27,6 +34,14 @@ pub type Style =
   | Selected(Int)      # a "selected" row: colored background, dark fg
 
 # ---- The Ui tree. ----
+#[doc("""
+A view as an immutable value: the tree `render` turns into terminal
+lines.
+
+Building one is effect-free, which is what makes views testable by
+structural equality — no terminal is involved until the app runtime
+writes the rendered lines.
+""")]
 pub type Ui =
   Text(Style, String)
   | Line                       # a blank line
@@ -36,51 +51,93 @@ pub type Ui =
   | Pad(Int, Ui)               # indent child by N spaces
 
 # ---- Smart constructors (the ergonomic surface). ----
+#[doc("One line of unstyled text.")]
 pub fn text(s: String) : Ui = Text(Plain, s)
+
+#[doc("One line in a 256-color foreground.")]
 pub fn label(code: Int, s: String) : Ui = Text(Fg(code), s)
+
+#[doc("A heading: bold cyan, the framework's convention for section titles.")]
 pub fn title(s: String) : Ui = Text(FgBold(44), s)
+
+#[doc("Secondary text, rendered dim.")]
 pub fn muted(s: String) : Ui = Text(Dim, s)
+
+#[doc("A blank line.")]
 pub fn blank() : Ui = Line
+
+#[doc("Stack children vertically.")]
 pub fn col(kids: [Ui]) : Ui = Col(kids)
+
+#[doc("""
+Place children side by side.
+
+The row engine is multi-line: each child renders to a block, the
+blocks are padded to a common width and height, then glued with a
+one-space gutter — so panes and columns align rather than only
+single-line label rows.
+""")]
 pub fn row(kids: [Ui]) : Ui = Row(kids)
+
+#[doc("Indent a child by `n` spaces.")]
 pub fn pad(n: Int, child: Ui) : Ui = Pad(n, child)
-# A box whose height auto-fits its content (inner height 0 = auto).
+
+#[doc("""
+Frame a child in a rounded border with a title, auto-fitting the
+height to the content.
+
+`width` is the INNER width — the content columns, excluding the border
+and its one-column padding on each side.
+""")]
 pub fn box(width: Int, ttl: String, child: Ui) : Ui = Box(75, width, 0, ttl, child)
+
+#[doc("`box` with an explicit border color.")]
 pub fn box_color(color: Int, width: Int, ttl: String, child: Ui) : Ui = Box(color, width, 0, ttl, child)
 
-# A box stretched to an explicit inner height: the body is padded
-# with blank lines down to `height` (or truncated if the content is
-# taller). This is how a panel fills the vertical space the caller
-# allots it — the caller computes `height` from `term.rows()` minus
-# the chrome above/below. `height <= 0` means auto (same as `box`).
+#[doc("""
+A box stretched to an explicit inner height.
+
+The body is padded with blank lines down to `height`, or truncated if
+the content is taller. This is how a panel fills the vertical space
+its caller allots it — typically `term.rows()` minus the chrome above
+and below. `height <= 0` means auto-fit, same as `box`.
+""")]
 pub fn box_filled(color: Int, width: Int, height: Int, ttl: String, child: Ui) : Ui =
   Box(color, width, height, ttl, child)
 
-# split: two boxed panels side by side, each with its own inner width
-# and title. Built on the multi-line Row.
+#[doc("""
+Two boxed panels side by side, each with its own inner width and
+title. The 2-case of `columns`.
+""")]
 pub fn split(lw: Int, lt: String, left: Ui, rw: Int, rt: String, right: Ui) : Ui =
   Row([ box(lw, lt, left), box(rw, rt, right) ])
 
-# columns: N panels in a row, already-rendered Uis placed side by side.
-# This is the general form `split` is the 2-case of — the multi-line
-# Row engine handles any N. Used by the kanban board.
+#[doc("""
+N panels side by side — the general form `split` specialises.
+
+The multi-line row engine handles any N, which is what the kanban
+board is built on.
+""")]
 pub fn columns(panels: [Ui]) : Ui = Row(panels)
 
-# ---- Visible-width measurement. Neither `string.length` nor a
-# codepoint count gives display columns: wide glyphs (emoji, CJK,
-# fullwidth) occupy two, combining marks occupy none, and ANSI color
-# codes occupy none while still being part of the string.
-#
-# The per-codepoint half is `text.char_width` (the East Asian Width
-# table). What the stdlib deliberately leaves to the caller is the
-# escape sequences — `text.display_width` measures the codepoints it
-# is given — so terevaka keeps the ANSI-skipping wrapper and delegates
-# the width itself.
-#
+# ---- Visible-width measurement ----
 # Why width and not a plain count: an emoji is 2 terminal columns, so
 # counting one column per codepoint undercounts it by one and pushes a
-# box's right border out by one cell per emoji on the line (the bug
-# that breaks the kanban borders).
+# box's right border out by one cell per emoji on the line — the bug
+# that breaks the kanban borders.
+#[doc("""
+The number of terminal columns `s` occupies.
+
+Neither `string.length` nor a codepoint count answers this: wide
+glyphs (emoji, CJK, fullwidth) occupy two columns, combining marks
+occupy none, and ANSI colour codes occupy none while still being part
+of the string. Width comes from the stdlib table; the ANSI skipping is
+terevaka's, since `text.display_width` measures only the codepoints it
+is given.
+
+Measured per codepoint, not per grapheme cluster — an emoji ZWJ
+sequence is counted as its parts.
+""")]
 pub fn visible_len(s: String) : Int = vis_loop(string.chars(s), false, 0)
 
 fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
@@ -97,18 +154,30 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
   }
 
 # ---- helpers ----
+#[doc("`s` concatenated `n` times; empty when `n <= 0`.")]
 pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
+#[doc("A run of `n` spaces.")]
 pub fn spaces(n: Int) : String = repeat(" ", n)
 
-# pad a visible string to `width` columns (right padding)
+#[doc("""
+Pad `s` on the right to `width` display columns.
+
+A string already at or past `width` is returned unchanged — use `cell`
+when the result must be exactly `width` columns.
+""")]
 pub fn fit(s: String, width: Int) : String = {
   let v = visible_len(s)
   if v >= width { s } else { s ++ spaces(width - v) }
 }
 
-# truncate a string to at most `width` visible columns, appending "…"
-# if it was cut. Assumes no ANSI codes in `s` (callers pass raw text,
-# then color the result).
+#[doc("""
+Cut `s` to at most `width` display columns, appending "…" when it was
+cut.
+
+A wide glyph is taken whole or not at all, so the result never
+straddles a column. Assumes `s` carries no ANSI codes: colour the
+result, do not truncate coloured text.
+""")]
 pub fn truncate(s: String, width: Int) : String = {
   let v = visible_len(s)
   if v <= width { s }
@@ -128,8 +197,7 @@ fn take_cols(cs: [Char], n: Int, taken: Int, acc: String) : String =
     }
   }
 
-# fit-or-truncate: ensure exactly `width` columns (truncate if long,
-# pad if short).
+#[doc("Exactly `width` columns: truncated if long, padded if short.")]
 pub fn cell(s: String, width: Int) : String = fit(truncate(s, width), width)
 
 # apply a Style to a raw string, producing the colored string
@@ -142,7 +210,14 @@ fn styled(st: Style, s: String) : String =
     Selected(c)  -> term.bg(c, term.fg(236, s))
   }
 
-# ---- render: Ui -> [String] (a list of painted lines). ----
+#[doc("""
+Render a `Ui` to a list of ready-to-paint lines, each already
+carrying its ANSI codes.
+
+Pure: the app runtime is what positions the lines on screen. Two equal
+`Ui` values render to equal line lists, which is what golden-line tests
+rely on.
+""")]
 pub fn render(u: Ui) : [String] =
   match u {
     Text(st, s)   -> [styled(st, s)]

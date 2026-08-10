@@ -6,6 +6,13 @@
 
 import time
 
+#[doc("""
+The current UTC time as "HH:MM:SS UTC".
+
+Derived from epoch seconds by integer arithmetic, since the stdlib has
+no localtime — the trailing "UTC" is part of the string so a reader is
+never misled about the zone.
+""")]
 pub fn hhmmss_utc() : String / Clock = {
   let secs = time.now().secs
   let day  = secs % 86400

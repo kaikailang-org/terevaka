@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Changed
+
+- **The sources follow `kai info idiomatic`.** Three passes, no
+  behaviour change: ladders of `if`/`else` over one scrutinee become
+  `match` (term.poll_key was four deep with a match buried inside it,
+  and every widget dispatching on `Printable(c)` had the same shape);
+  fourteen private reimplementations of stdlib functions are deleted in
+  favour of `list.length`, `list.nth`, `list.take`/`drop` and
+  `math.int.min`/`max`; and every list-building recursion becomes a
+  pipe, `list.flat_map` or `list.map_indexed`, which also drops the
+  index accumulators they threaded purely to count.
+- **Every `pub` symbol carries `#[doc]`** — 115 of them, previously
+  documented with plain `#` comments that no tooling could see. They
+  now surface in `kai doc`.
+
+### Added
+
+- **Tests for the widgets**: menu (cursor wrap, empty list), listbox
+  (the scrolling viewport, both window/list length orders) and board
+  (the card-moving operations, which cross two lists). 25 tests total,
+  up from 5.
+
+### Fixed
+
+- **`kai test` runs the suite in package mode again.** kaikai 0.111.0
+  lifted the entry-point requirement for libraries (#1721, filed from
+  here as #1718), so `kai test` and `kai test ./...` both work without
+  the manifest naming an entry that a library does not have.
+
 ## [0.1.2] - 2026-08-09
 
 ### Fixed

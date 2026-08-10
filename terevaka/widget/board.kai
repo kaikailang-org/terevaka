@@ -27,18 +27,24 @@
 import terevaka.ui
 import terevaka.term
 
-# A card's type. Drives the one-char marker shown after the ref. ASCII
-# markers (not emoji) so the width is deterministic on every terminal
-# and the box borders always align.
+#[doc("""
+A card's type, which drives its one-char marker.
+
+The markers are ASCII rather than emoji so column widths are
+deterministic on every terminal and the borders always align.
+""")]
 pub type CardKind = Feature | Bug | Chore | Task
 
+#[doc("A card: a reference, a type, and a title.")]
 pub type Card = { ref: String, kind: CardKind, title: String }
 
+#[doc("A workflow column: its title, border colour, cards, and its own cursor.")]
 pub type Column = { title: String, color: Int, cards: [Card], cursor: Int }
 
+#[doc("The board: N columns, which one is active, and the inner size of each.")]
 pub type Board = { columns: [Column], active: Int, width: Int, height: Int }
 
-# The one-char type marker. ASCII, width 1 — see the CardKind note.
+#[doc("The one-char marker for a card type: `+` `!` `~` `.` — ASCII, width 1.")]
 pub fn kind_marker(k: CardKind) : String =
   match k {
     Feature -> "+"
@@ -47,25 +53,40 @@ pub fn kind_marker(k: CardKind) : String =
     Task    -> "."
   }
 
+#[doc("Build a card.")]
 pub fn card(ref: String, kind: CardKind, title: String) : Card =
   Card { ref: ref, kind: kind, title: title }
 
+#[doc("Build a column, cursor on its first card.")]
 pub fn column(title: String, color: Int, cards: [Card]) : Column =
   Column { title: title, color: color, cards: cards, cursor: 0 }
 
-# `width` is the inner width of each column box; `height` is the inner
-# height the columns stretch to (0 = auto-fit to content).
+#[doc("""
+A board over `columns`, the first active.
+
+`width` is the INNER width of each column box and `height` the inner
+height they stretch to, so an app derives both from `term.cols()` /
+`term.rows()` to fill the screen. `height` 0 auto-fits to content.
+""")]
 pub fn init(columns: [Column], width: Int, height: Int) : Board =
   Board { columns: columns, active: 0, width: width, height: height }
 
 # ---- queries ----
+#[doc("The index of the active column.")]
 pub fn active_column(b: Board) : Int = b.active
+#[doc("The card under the cursor in the active column, or `None` if it is empty.")]
 pub fn selected_card(b: Board) : Option[Card] = {
   let col = nth_col(b.columns, b.active)
   nth_card(col.cards, col.cursor)
 }
 
-# ---- navigation: only ←→↑↓ here; movement is separate (below) ----
+#[doc("""
+Navigate: Left/Right or h/l switch column, Up/Down or k/j move the
+cursor. Both wrap.
+
+This moves the CURSOR only. Moving a card is a separate operation the
+app binds its own keys to — see `move_card_left` and friends.
+""")]
 pub fn update(b: Board, k: term.Key) : Board =
   match k {
     Left         -> switch_col(b, -1)
@@ -97,7 +118,9 @@ fn move_cursor(b: Board, d: Int) : Board = {
 # ---- MOVING a card between columns (the kanban operation) ----
 # Take the selected card out of the active column and insert it at the
 # top of the neighbour column; the cursor follows it.
+#[doc("Move the selected card to the next column, top of the stack. The cursor follows it.")]
 pub fn move_card_right(b: Board) : Board = move_card(b, 1)
+#[doc("Move the selected card to the previous column, top of the stack. The cursor follows it.")]
 pub fn move_card_left(b: Board) : Board = move_card(b, -1)
 
 fn move_card(b: Board, d: Int) : Board = {
@@ -122,7 +145,9 @@ fn move_card(b: Board, d: Int) : Board = {
 }
 
 # ---- REORDERING within the active column ----
+#[doc("Swap the selected card with the one above it. A no-op at the top.")]
 pub fn move_card_up(b: Board) : Board = reorder(b, -1)
+#[doc("Swap the selected card with the one below it. A no-op at the bottom.")]
 pub fn move_card_down(b: Board) : Board = reorder(b, 1)
 
 fn reorder(b: Board, d: Int) : Board = {
@@ -136,15 +161,19 @@ fn reorder(b: Board, d: Int) : Board = {
 }
 
 # ---- editing ----
-# Add a card to the active column. The new card's ref is generated
-# from a caller-supplied prefix + the column's next index; the kind
-# defaults to Task (the app can offer a type picker later).
+#[doc("""
+Append a card to the active column and put the cursor on it.
+
+The caller supplies the ref, since ref schemes are the app's business;
+the kind defaults to `Task`.
+""")]
 pub fn add_card(b: Board, ref: String, title: String) : Board = {
   let col = nth_col(b.columns, b.active)
   let cards = col.cards ++ [Card { ref: ref, kind: Task, title: title }]
   set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards, cursor: list.length(col.cards) })
 }
 
+#[doc("Drop the selected card, clamping the cursor. A no-op on an empty column.")]
 pub fn remove_selected(b: Board) : Board = {
   let col = nth_col(b.columns, b.active)
   if list.length(col.cards) == 0 { b } else {
@@ -154,8 +183,7 @@ pub fn remove_selected(b: Board) : Board = {
   }
 }
 
-# ---- view: the columns side by side, the active one highlighted,
-# each stretched to the board's inner height. ----
+#[doc("Render the columns side by side, the active one bordered in cyan.")]
 pub fn view(b: Board) : Ui =
   ui.columns(col_panels(b.columns, b.active, b.width, b.height))
 

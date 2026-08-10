@@ -9,17 +9,30 @@ import terevaka.ui
 import terevaka.term
 import core.string
 
+#[doc("A single-line text field: its contents and whether it has focus.")]
 pub type Input = { text: String, focused: Bool }
 
-# what an update produced, so the app can route the result
+#[doc("""
+What a key did to the field, so the app can route the result.
+
+`Editing` carries the field back for the next key; `Done` carries the
+final text (Enter); `Cancelled` means Esc — the app keeps the previous
+value.
+""")]
 pub type Outcome = Editing(Input) | Done(String) | Cancelled
 
+#[doc("An empty, unfocused field.")]
 pub fn init() : Input = Input { text: "", focused: false }
+#[doc("An unfocused field pre-filled with `s`.")]
 pub fn with_text(s: String) : Input = Input { text: s, focused: false }
+#[doc("Give the field focus — it renders a cursor block and takes keys.")]
 pub fn focus(i: Input) : Input = Input { text: i.text, focused: true }
+#[doc("Remove focus, keeping the text.")]
 pub fn blur(i: Input) : Input = Input { text: i.text, focused: false }
+#[doc("The current text.")]
 pub fn value(i: Input) : String = i.text
 
+#[doc("Apply a key: printable chars append, Backspace deletes, Enter commits, Esc cancels.")]
 pub fn update(i: Input, k: term.Key) : Outcome =
   match k {
     Printable(c) -> Editing(Input { text: i.text ++ "#{c}", focused: i.focused })
@@ -29,7 +42,7 @@ pub fn update(i: Input, k: term.Key) : Outcome =
     _            -> Editing(i)
   }
 
-# view: a framed field with a label; shows a cursor block when focused
+#[doc("Render as `label ⟨ text ⟩`, with a cursor block when focused.")]
 pub fn view(lbl: String, i: Input) : Ui = {
   let shown = if i.text == "" { term.dim("(empty)") } else { i.text }
   let cursor = if i.focused { term.fg(83, "▏") } else { "" }

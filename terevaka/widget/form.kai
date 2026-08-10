@@ -11,21 +11,25 @@ import terevaka.term
 # ============================================================
 # Checkbox — a single on/off toggle. Space flips it.
 # ============================================================
+#[doc("An on/off toggle with a label.")]
 pub type Checkbox = { label: String, checked: Bool }
 
+#[doc("A checkbox with an initial state.")]
 pub fn checkbox(label: String, checked: Bool) : Checkbox =
   Checkbox { label: label, checked: checked }
 
+#[doc("Flip the checkbox.")]
 pub fn toggle(c: Checkbox) : Checkbox =
   Checkbox { label: c.label, checked: not c.checked }
 
-# Space toggles; other keys leave it unchanged.
+#[doc("Space toggles; every other key leaves it unchanged.")]
 pub fn checkbox_update(c: Checkbox, k: term.Key) : Checkbox =
   match k {
     Printable(ch) -> if ch == ' ' { toggle(c) } else { c }
     _             -> c
   }
 
+#[doc("Render as `[x] label`, the label highlighted when focused.")]
 pub fn checkbox_view(c: Checkbox, focused: Bool) : Ui = {
   let mark = if c.checked { term.fg(83, "[x]") } else { term.fg(245, "[ ]") }
   let lbl  = if focused { term.fg(220, c.label) } else { c.label }
@@ -36,14 +40,22 @@ pub fn checkbox_view(c: Checkbox, focused: Bool) : Ui = {
 # Radio group — N options, exactly one selected. Up/Down or j/k
 # moves; Space/Enter selects the highlighted one.
 # ============================================================
+#[doc("""
+A one-of-N group. `cursor` is what the highlight is on, `chosen` what
+is actually selected — they differ while the user is moving around.
+""")]
 pub type Radio = { options: [String], cursor: Int, chosen: Int }
 
+#[doc("A radio group over `options`, the first both highlighted and chosen.")]
 pub fn radio(options: [String]) : Radio =
   Radio { options: options, cursor: 0, chosen: 0 }
 
+#[doc("The index of the selected option.")]
 pub fn radio_chosen(r: Radio) : Int = r.chosen
+#[doc("The label of the selected option, or the empty string when there are none.")]
 pub fn radio_chosen_label(r: Radio) : String = list.nth(r.options, r.chosen).unwrap_or("")
 
+#[doc("Up/Down or k/j move the highlight; Space or Enter select what it is on.")]
 pub fn radio_update(r: Radio, k: term.Key) : Radio =
   match k {
     Up           -> move_cursor(r, -1)
@@ -63,6 +75,7 @@ fn move_cursor(r: Radio, d: Int) : Radio =
 fn choose(r: Radio) : Radio =
   Radio { options: r.options, cursor: r.cursor, chosen: r.cursor }
 
+#[doc("Render one `(o) label` row per option, the chosen one filled.")]
 pub fn radio_view(r: Radio, focused: Bool) : Ui =
   ui.col(radio_rows(r.options, r.cursor, r.chosen, focused))
 
@@ -79,10 +92,18 @@ fn radio_row(lbl: String, on_cursor: Bool, is_chosen: Bool, focused: Bool) : Ui 
 # Button — a label activated with Enter. `pressed` reports a press
 # for the app to act on (it does not hold lasting state).
 # ============================================================
+#[doc("A labelled button. It holds no pressed state — see `button_pressed`.")]
 pub type Button = { label: String }
 
+#[doc("A button with `label`.")]
 pub fn button(label: String) : Button = Button { label: label }
 
+#[doc("""
+Whether `k` presses a button: Enter or Space.
+
+A press is an event, not state — the app acts on it directly, which is
+why this takes only the key.
+""")]
 pub fn button_pressed(k: term.Key) : Bool =
   match k {
     Enter        -> true
@@ -90,6 +111,7 @@ pub fn button_pressed(k: term.Key) : Bool =
     _            -> false
   }
 
+#[doc("Render as `[ label ]`, filled when focused.")]
 pub fn button_view(b: Button, focused: Bool) : Ui =
   if focused {
     ui.text(term.bg(44, term.fg(236, " " ++ b.label ++ " ")))

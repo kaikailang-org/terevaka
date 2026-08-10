@@ -7,18 +7,16 @@
 import terevaka.ui
 import terevaka.term
 
+#[doc("One key-to-action hint, e.g. `q` / `quit`.")]
 pub type Hint = { key: String, action: String }
 
+#[doc("Build a hint from a key label and the action it performs.")]
 pub fn hint(key: String, action: String) : Hint = Hint { key: key, action: action }
 
-# render a list of hints as "key action · key action · …"
+#[doc("Render the hints as one line: `key action · key action · …`.")]
 pub fn view(hints: [Hint]) : Ui = ui.text(join_hints(hints))
 
 fn join_hints(hs: [Hint]) : String =
-  match hs {
-    []           -> ""
-    [h]          -> one(h)
-    [h, ...rest] -> one(h) ++ term.fg(238, "  ·  ") ++ join_hints(rest)
-  }
+  string.join(hs | (h) => one(h), term.fg(238, "  ·  "))
 
 fn one(h: Hint) : String = term.fg(44, h.key) ++ " " ++ term.fg(245, h.action)

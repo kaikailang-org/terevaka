@@ -13,18 +13,22 @@
 import terevaka.ui
 import terevaka.term
 
+#[doc("A list of item labels plus the cursor position.")]
 pub type Menu = { items: [String], cursor: Int }
 
+#[doc("A menu over `items`, cursor on the first.")]
 pub fn init(items: [String]) : Menu = Menu { items: items, cursor: 0 }
 
+#[doc("How many items the menu holds.")]
 pub fn count(m: Menu) : Int = list.length(m.items)
 
-# the label of the currently-selected item ("" if empty)
+#[doc("The selected item's label, or the empty string when there are none.")]
 pub fn selected_label(m: Menu) : String = list.nth(m.items, m.cursor).unwrap_or("")
 
+#[doc("The cursor index.")]
 pub fn selected(m: Menu) : Int = m.cursor
 
-# move the cursor; wraps around. Up/Down and j/k. Other keys: no-op.
+#[doc("Move the cursor with Up/Down or k/j, wrapping at both ends. Other keys are no-ops.")]
 pub fn update(m: Menu, k: term.Key) : Menu =
   match k {
     Up           -> with_cursor(m, wrap(m.cursor - 1, count(m)))
@@ -39,7 +43,7 @@ pub fn update(m: Menu, k: term.Key) : Menu =
 
 fn with_cursor(m: Menu, c: Int) : Menu = Menu { items: m.items, cursor: c }
 
-# view: each item a row; selected gets the highlight bar.
+#[doc("Render one row per item, the selected one carrying the highlight bar.")]
 pub fn view(m: Menu) : Ui = {
   let w = item_width(m.items)
   ui.col(list.map_indexed(m.items, (i, x) => item_row(x, i == m.cursor, w)))

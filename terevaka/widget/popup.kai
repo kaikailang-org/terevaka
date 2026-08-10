@@ -10,12 +10,14 @@
 import terevaka.ui
 import terevaka.term
 
+#[doc("A titled, bordered box meant to be drawn on top of the rest of the UI.")]
 pub type Popup = { title: String, lines: [String], width: Int }
 
+#[doc("A popup with a title and body lines, at the default width.")]
 pub fn make(title: String, lines: [String]) : Popup =
   Popup { title: title, lines: lines, width: 34 }
 
-# returns true if the key dismisses the popup
+#[doc("Whether `k` dismisses the popup: Enter, Esc or q.")]
 pub fn dismissed(k: term.Key) : Bool =
   match k {
     Enter        -> true
@@ -24,13 +26,15 @@ pub fn dismissed(k: term.Key) : Bool =
     _            -> false
   }
 
-# view: a magenta-bordered box. The body lines are plain strings the
-# caller already colored if it wants; this frames them.
-pub fn view(p: Popup) : Ui =
-  ui.box_color(212, p.width, p.title, ui.col(body_uis(p.lines)))
+#[doc("""
+Frame the popup in a magenta-bordered box.
 
-fn body_uis(lines: [String]) : [Ui] =
-  match lines {
-    []           -> []
-    [l, ...rest] -> [ui.text(l), ...body_uis(rest)]
-  }
+Body lines are passed through as-is, so a caller that wants them
+coloured colours them itself.
+
+Draw the result as an overlay (`app.run_overlay` or
+`app.paint_with_overlay`) — rendering it inline just puts a box in the
+flow.
+""")]
+pub fn view(p: Popup) : Ui =
+  ui.box_color(212, p.width, p.title, ui.col(p.lines | (l) => ui.text(l)))

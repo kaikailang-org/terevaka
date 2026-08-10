@@ -18,18 +18,28 @@
 import terevaka.ui
 import terevaka.term
 
-# what an update decides: keep looping with a new model, or quit.
+#[doc("What an update decides: keep looping with a new model, or quit.")]
 pub type Step[m] = Continue(m) | Quit
 
+#[doc("Keep looping with `model` as the new state.")]
 pub fn keep[m](model: m) : Step[m] = Continue(model)
+
+#[doc("Stop the loop; the runtime restores the terminal and returns.")]
 pub fn quit[m]() : Step[m] = Quit
 
-# Run the app. `tick_ms` is the idle poll timeout (lower = snappier
-# clock/animation, more CPU). 100-200 ms is a good default.
-# Row-polymorphic over `e`: the user's view/update carry whatever
-# effects they actually use (Clock for a live clock, or nothing), and
-# the runtime adds only Ffi + Spawn-free terminal IO. So a static app
-# needs no Clock, a live one declares it — the row flows through.
+#[doc("""
+Run a Model/update/view app until `update` returns `quit()`.
+
+`tick_ms` is the idle poll timeout: lower is a snappier clock or
+animation and more CPU, and 100-200 ms is a good default. On timeout
+the loop delivers a `Tick` key, which is what lets a clock advance
+with no input.
+
+The runtime owns raw mode, the input loop, the flicker-free repaint
+and teardown. Row-polymorphic over `e`: view and update carry whatever
+effects they actually use, so a static app needs no Clock and a live
+one simply declares it.
+""")]
 pub fn run[m, e](
   initial: m,
   update:  (m, term.Key) -> Step[m] / Ffi + e,
@@ -124,14 +134,26 @@ fn paint_lines(lines: [String], row: Int, col: Int) : Unit / Ffi =
 
 # ---- overlay compositing: paint a base Ui, then an overlay Ui on
 # top of it at (row, col). Used for modal popups. ----
+#[doc("""
+Paint `base`, then draw `overlay` on top of it at (`orow`, `ocol`).
+
+The overlay is written over the base rather than composited into it,
+so the base is not disturbed — this is how modal popups are drawn.
+""")]
 pub fn paint_with_overlay(base: Ui, overlay: Ui, orow: Int, ocol: Int) : Unit / Ffi = {
   term.write(term.clear())
   paint_lines(ui.render(base), 2, 4)
   paint_lines(ui.render(overlay), orow, ocol)
 }
 
-# A run variant that also takes an overlay function: `overlay(model)`
-# returns `Some(ui)` to draw a modal on top, or `None`.
+#[doc("""
+`run` with a modal layer: `overlay(model)` returns `Some(ui)` to draw
+on top of the base view, or `None` for no modal.
+
+Keys still go to `update` while a modal is up — the app decides what
+the overlay consumes, so a popup can be dismissed or answered without
+a second event loop.
+""")]
 pub fn run_overlay[m, e](
   initial: m,
   update:  (m, term.Key) -> Step[m] / Ffi + e,
