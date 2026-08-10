@@ -1,0 +1,34 @@
+# Tests for the menu widget — cursor movement and the empty-list
+# edges, which is where the wrap-around and the index lookup meet.
+
+import terevaka.widget.menu
+import terevaka.term
+
+test "menu — cursor wraps in both directions" {
+  let m = menu.init(["a", "b", "c"])
+  assert menu.selected(m) == 0
+  assert menu.selected_label(m) == "a"
+
+  let down = menu.update(m, Down)
+  assert menu.selected_label(down) == "b"
+
+  # k/j mirror Up/Down
+  assert menu.selected(menu.update(m, Printable('j'))) == 1
+  assert menu.selected(menu.update(m, Printable('k'))) == 2   # wraps to last
+
+  # a full cycle returns to the start
+  assert menu.selected(menu.update(menu.update(menu.update(m, Down), Down), Down)) == 0
+}
+
+test "menu — an empty menu has no label and does not move" {
+  let m = menu.init([])
+  assert menu.count(m) == 0
+  assert menu.selected_label(m) == ""
+  assert menu.selected_label(menu.update(m, Down)) == ""
+}
+
+test "menu — unbound keys leave the cursor alone" {
+  let m = menu.update(menu.init(["a", "b"]), Down)
+  assert menu.selected(menu.update(m, Printable('x'))) == 1
+  assert menu.selected(menu.update(m, Tab)) == 1
+}

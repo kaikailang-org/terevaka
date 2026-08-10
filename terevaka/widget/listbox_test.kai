@@ -1,0 +1,45 @@
+# Tests for the listbox widget — the scrolling viewport, which is the
+# part with real arithmetic: the window follows the cursor and clamps
+# at both ends, and the rendered block is always height + 1 lines
+# (the rows plus the scroll hint).
+
+import terevaka.widget.listbox
+import terevaka.ui
+import terevaka.term
+
+fn down_n(l: listbox.List, n: Int) : listbox.List =
+  if n <= 0 { l } else { down_n(listbox.update(l, Down), n - 1) }
+
+test "listbox — the viewport follows the cursor down" {
+  let l = listbox.init(["a", "b", "c", "d", "e"], 3)
+  assert listbox.selected_label(l) == "a"
+
+  # inside the window: the cursor moves, the window does not
+  assert listbox.selected_label(down_n(l, 2)) == "c"
+
+  # past the window: it scrolls to keep the cursor visible
+  assert listbox.selected_label(down_n(l, 3)) == "d"
+  assert listbox.selected_label(down_n(l, 4)) == "e"
+}
+
+test "listbox — the cursor wraps around the ends" {
+  let l = listbox.init(["a", "b", "c"], 2)
+  assert listbox.selected_label(down_n(l, 3)) == "a"      # full cycle
+  assert listbox.selected_label(listbox.update(l, Up)) == "c"
+}
+
+test "listbox — a window shorter than the list renders height+1 lines" {
+  let l = listbox.init(["a", "b", "c", "d", "e"], 3)
+  assert list.length(ui.render(listbox.view(l))) == 4      # 3 rows + hint
+}
+
+test "listbox — a window longer than the list renders what exists" {
+  let l = listbox.init(["a", "b"], 5)
+  assert list.length(ui.render(listbox.view(l))) == 3      # 2 rows + hint
+}
+
+test "listbox — an empty list renders just the hint" {
+  let l = listbox.init([], 3)
+  assert listbox.selected_label(l) == ""
+  assert list.length(ui.render(listbox.view(l))) == 1
+}

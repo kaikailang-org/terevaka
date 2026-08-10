@@ -99,7 +99,6 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
 # ---- helpers ----
 pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
 pub fn spaces(n: Int) : String = repeat(" ", n)
-fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
 
 # pad a visible string to `width` columns (right padding)
 pub fn fit(s: String, width: Int) : String = {
@@ -175,7 +174,7 @@ fn pad_lines(lines: [String], n: Int) : [String] =
 # (ASCII) tables expressible, not just single-line label rows.
 fn render_row(kids: [Ui]) : [String] = {
   let blocks = blockify(kids)        # each child -> a width-uniform block
-  let h = max_height(blocks, 0)
+  let h = max_height(blocks)
   glue_blocks(pad_heights(blocks, h), "")
 }
 
@@ -185,38 +184,25 @@ fn blockify(kids: [Ui]) : [[String]] =
     []           -> []
     [k, ...rest] -> {
       let lines = render(k)
-      let w = max_width(lines, 0)
+      let w = max_width(lines)
       [pad_block_width(lines, w), ...blockify(rest)]
     }
   }
 
-fn max_width(lines: [String], acc: Int) : Int =
-  match lines {
-    []           -> acc
-    [l, ...rest] -> max_width(rest, max_int(acc, visible_len(l)))
-  }
+# widest line of a block, in display columns (0 for an empty block)
+fn max_width(lines: [String]) : Int =
+  list.max(lines | (l) => visible_len(l)).unwrap_or(0)
 
 fn pad_block_width(lines: [String], w: Int) : [String] =
-  match lines {
-    []           -> []
-    [l, ...rest] -> [fit(l, w), ...pad_block_width(rest, w)]
-  }
+  lines | (l) => fit(l, w)
 
-fn max_height(blocks: [[String]], acc: Int) : Int =
-  match blocks {
-    []           -> acc
-    [b, ...rest] -> max_height(rest, max_int(acc, len_of(b)))
-  }
+# tallest block, in lines
+fn max_height(blocks: [[String]]) : Int =
+  list.max(blocks | .length()).unwrap_or(0)
 
 # pad each block to `h` lines by appending blank lines (full-width)
 fn pad_heights(blocks: [[String]], h: Int) : [[String]] =
-  match blocks {
-    []           -> []
-    [b, ...rest] -> {
-      let w = max_width(b, 0)
-      [extend_lines(b, w, h - len_of(b)), ...pad_heights(rest, h)]
-    }
-  }
+  blocks | (b) => extend_lines(b, max_width(b), h - list.length(b))
 
 fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
   if extra <= 0 { b } else { b ++ [spaces(w)] ++ extend_lines([], w, extra - 1) }
@@ -236,12 +222,6 @@ fn zip_lines(a: [String], b: [String], gutter: String) : [String] =
       [] -> [x]
       [y, ...rb] -> [x ++ gutter ++ y, ...zip_lines(ra, rb, gutter)]
     }
-  }
-
-fn len_of(xs: [a]) : Int =
-  match xs {
-    []           -> 0
-    [x, ...rest] -> 1 + len_of(rest)
   }
 
 # Box: frame a block of lines with a rounded border in color `col`,
@@ -266,7 +246,7 @@ fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = 
 # spaces) on purpose — box_body fits every line to the inner width and
 # adds the colored borders, so an empty body line becomes a properly
 # bordered blank row without us duplicating the width/color work here.
-fn fit_height(lines: [String], h: Int) : [String] = match len_of(lines) {
+fn fit_height(lines: [String], h: Int) : [String] = match list.length(lines) {
   n if n == h -> lines
   n if n > h  -> take_lines(lines, h)
   n           -> lines ++ blank_lines(h - n)

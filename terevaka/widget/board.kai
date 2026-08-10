@@ -85,11 +85,11 @@ fn nav_char(b: Board, c: Char) : Board = match c {
 }
 
 fn switch_col(b: Board, d: Int) : Board =
-  Board { columns: b.columns, active: wrap(b.active + d, count(b.columns)), width: b.width, height: b.height }
+  Board { columns: b.columns, active: wrap(b.active + d, list.length(b.columns)), width: b.width, height: b.height }
 
 fn move_cursor(b: Board, d: Int) : Board = {
   let col = nth_col(b.columns, b.active)
-  let n = count(col.cards)
+  let n = list.length(col.cards)
   let cur = if n == 0 { 0 } else { wrap(col.cursor + d, n) }
   set_col(b, b.active, Column { title: col.title, color: col.color, cards: col.cards, cursor: cur })
 }
@@ -102,7 +102,7 @@ pub fn move_card_left(b: Board) : Board = move_card(b, -1)
 
 fn move_card(b: Board, d: Int) : Board = {
   let src_i = b.active
-  let dst_i = wrap(b.active + d, count(b.columns))
+  let dst_i = wrap(b.active + d, list.length(b.columns))
   if src_i == dst_i { b } else {
     let src = nth_col(b.columns, src_i)
     match nth_card(src.cards, src.cursor) {
@@ -110,7 +110,7 @@ fn move_card(b: Board, d: Int) : Board = {
       Some(c) -> {
         let src2 = Column { title: src.title, color: src.color,
                             cards: remove_at(src.cards, src.cursor),
-                            cursor: clamp_cursor(src.cursor, count(src.cards) - 1) }
+                            cursor: clamp_cursor(src.cursor, list.length(src.cards) - 1) }
         let dst = nth_col(b.columns, dst_i)
         let dst2 = Column { title: dst.title, color: dst.color, cards: [c, ...dst.cards], cursor: 0 }
         let b1 = set_col(b, src_i, src2)
@@ -129,7 +129,7 @@ fn reorder(b: Board, d: Int) : Board = {
   let col = nth_col(b.columns, b.active)
   let i = col.cursor
   let j = i + d
-  if j < 0 or j >= count(col.cards) { b } else {
+  if j < 0 or j >= list.length(col.cards) { b } else {
     let swapped = swap_at(col.cards, i, j)
     set_col(b, b.active, Column { title: col.title, color: col.color, cards: swapped, cursor: j })
   }
@@ -142,15 +142,15 @@ fn reorder(b: Board, d: Int) : Board = {
 pub fn add_card(b: Board, ref: String, title: String) : Board = {
   let col = nth_col(b.columns, b.active)
   let cards = col.cards ++ [Card { ref: ref, kind: Task, title: title }]
-  set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards, cursor: count(col.cards) })
+  set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards, cursor: list.length(col.cards) })
 }
 
 pub fn remove_selected(b: Board) : Board = {
   let col = nth_col(b.columns, b.active)
-  if count(col.cards) == 0 { b } else {
+  if list.length(col.cards) == 0 { b } else {
     let cards = remove_at(col.cards, col.cursor)
     set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards,
-                                  cursor: clamp_cursor(col.cursor, count(cards) - 1) })
+                                  cursor: clamp_cursor(col.cursor, list.length(cards) - 1) })
   }
 }
 
@@ -166,7 +166,7 @@ fn col_panels(cols: [Column], active: Int, w: Int, h: Int, i: Int) : [Ui] =
   }
 
 fn col_panel(c: Column, is_active: Bool, w: Int, h: Int) : Ui = {
-  let ttl   = "#{c.title} (#{count(c.cards)})"
+  let ttl   = "#{c.title} (#{list.length(c.cards)})"
   let color = if is_active { 44 } else { c.color }
   ui.box_filled(color, w, h, ttl, card_list(c.cards, c.cursor, is_active, w, 0))
 }
@@ -258,8 +258,3 @@ fn wrap(i: Int, n: Int) : Int = match i {
   x if x >= n -> 0
   x           -> x
 }
-fn count(xs: [a]) : Int =
-  match xs {
-    []           -> 0
-    [x, ...rest] -> 1 + count(rest)
-  }

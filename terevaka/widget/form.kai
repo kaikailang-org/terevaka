@@ -42,7 +42,7 @@ pub fn radio(options: [String]) : Radio =
   Radio { options: options, cursor: 0, chosen: 0 }
 
 pub fn radio_chosen(r: Radio) : Int = r.chosen
-pub fn radio_chosen_label(r: Radio) : String = nth(r.options, r.chosen, "")
+pub fn radio_chosen_label(r: Radio) : String = list.nth(r.options, r.chosen).unwrap_or("")
 
 pub fn radio_update(r: Radio, k: term.Key) : Radio =
   match k {
@@ -59,7 +59,7 @@ pub fn radio_update(r: Radio, k: term.Key) : Radio =
   }
 
 fn move_cursor(r: Radio, d: Int) : Radio =
-  Radio { options: r.options, cursor: wrap(r.cursor + d, count(r.options)), chosen: r.chosen }
+  Radio { options: r.options, cursor: wrap(r.cursor + d, list.length(r.options)), chosen: r.chosen }
 fn choose(r: Radio) : Radio =
   Radio { options: r.options, cursor: r.cursor, chosen: r.cursor }
 
@@ -106,13 +106,3 @@ fn wrap(i: Int, n: Int) : Int = match i {
   x if x >= n -> 0
   x           -> x
 }
-fn count(xs: [a]) : Int =
-  match xs {
-    []           -> 0
-    [x, ...rest] -> 1 + count(rest)
-  }
-fn nth(xs: [String], i: Int, d: String) : String =
-  match xs {
-    []           -> d
-    [x, ...rest] -> if i == 0 { x } else { nth(rest, i - 1, d) }
-  }

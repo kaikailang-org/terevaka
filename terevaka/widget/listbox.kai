@@ -7,6 +7,7 @@
 
 import terevaka.ui
 import terevaka.term
+import math.int
 
 pub type List = { items: [String], cursor: Int, offset: Int, height: Int }
 
@@ -15,7 +16,7 @@ pub fn init(items: [String], height: Int) : List =
   List { items: items, cursor: 0, offset: 0, height: height }
 
 pub fn selected(l: List) : Int = l.cursor
-pub fn selected_label(l: List) : String = nth(l.items, l.cursor, "")
+pub fn selected_label(l: List) : String = list.nth(l.items, l.cursor).unwrap_or("")
 
 pub fn update(l: List, k: term.Key) : List =
   match k {
@@ -28,7 +29,7 @@ pub fn update(l: List, k: term.Key) : List =
 # move the cursor by d, wrapping, then scroll the viewport to keep
 # the cursor visible.
 fn move(l: List, d: Int) : List = {
-  let n = count(l.items)
+  let n = list.length(l.items)
   let cur = wrap(l.cursor + d, n)
   scroll_to(List { items: l.items, cursor: cur, offset: l.offset, height: l.height })
 }
@@ -46,8 +47,8 @@ fn scroll_to(l: List) : List = {
 # view: the visible window of items, selected one highlighted, plus a
 # scroll indicator (▲/▼) when there's more above/below.
 pub fn view(l: List) : Ui = {
-  let n = count(l.items)
-  let w = item_width(l.items, 0)
+  let n = list.length(l.items)
+  let w = item_width(l.items)
   let visible = slice_items(l.items, l.offset, l.height)
   let rows = render_rows(visible, l.cursor, l.offset, w)
   ui.col(rows ++ [scroll_hint(l.offset, l.height, n)])
@@ -69,39 +70,20 @@ fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
 fn scroll_hint(offset: Int, height: Int, n: Int) : Ui = {
   let up   = if offset > 0 { "▲" } else { " " }
   let down = if offset + height < n { "▼" } else { " " }
-  ui.label(245, "  #{up} #{down}  #{offset + 1}-#{min_int(offset + height, n)}/#{n}")
+  ui.label(245, "  #{up} #{down}  #{offset + 1}-#{int.min(offset + height, n)}/#{n}")
 }
 
 # ---- helpers ----
+# the visible window: drop everything above it, keep `len` rows.
 fn slice_items(items: [String], start: Int, len: Int) : [String] =
-  if len <= 0 { [] } else {
-    match items {
-      []           -> []
-      [x, ...rest] -> if start > 0 { slice_items(rest, start - 1, len) }
-                      else { [x, ...slice_items(rest, 0, len - 1)] }
-    }
-  }
+  list.take(list.drop(items, start), len)
 
-fn item_width(items: [String], acc: Int) : Int =
-  match items {
-    []           -> acc
-    [x, ...rest] -> item_width(rest, max_int(acc, ui.visible_len(x)))
-  }
+fn item_width(items: [String]) : Int =
+  list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
 
 fn wrap(i: Int, n: Int) : Int = match i {
   x if x < 0  -> n - 1
   x if x >= n -> 0
   x           -> x
 }
-fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
-fn min_int(a: Int, b: Int) : Int = if a <= b { a } else { b }
-fn count(xs: [a]) : Int =
-  match xs {
-    []           -> 0
-    [x, ...rest] -> 1 + count(rest)
-  }
-fn nth(xs: [String], i: Int, d: String) : String =
-  match xs {
-    []           -> d
-    [x, ...rest] -> if i == 0 { x } else { nth(rest, i - 1, d) }
-  }
+

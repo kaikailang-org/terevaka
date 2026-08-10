@@ -17,10 +17,10 @@ pub type Menu = { items: [String], cursor: Int }
 
 pub fn init(items: [String]) : Menu = Menu { items: items, cursor: 0 }
 
-pub fn count(m: Menu) : Int = list_len(m.items)
+pub fn count(m: Menu) : Int = list.length(m.items)
 
 # the label of the currently-selected item ("" if empty)
-pub fn selected_label(m: Menu) : String = nth_or(m.items, m.cursor, "")
+pub fn selected_label(m: Menu) : String = list.nth(m.items, m.cursor).unwrap_or("")
 
 pub fn selected(m: Menu) : Int = m.cursor
 
@@ -40,7 +40,7 @@ pub fn update(m: Menu, k: term.Key) : Menu =
 fn with_cursor(m: Menu, c: Int) : Menu = Menu { items: m.items, cursor: c }
 
 # view: each item a row; selected gets the highlight bar.
-pub fn view(m: Menu) : Ui = ui.col(rows(m.items, m.cursor, 0, item_width(m.items, 0)))
+pub fn view(m: Menu) : Ui = ui.col(rows(m.items, m.cursor, 0, item_width(m.items)))
 
 fn rows(items: [String], cursor: Int, i: Int, w: Int) : [Ui] =
   match items {
@@ -55,29 +55,15 @@ fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
     ui.row([ ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ") ])
   }
 
-# widest item, for a uniform highlight bar
-fn item_width(items: [String], acc: Int) : Int =
-  match items {
-    []           -> acc
-    [x, ...rest] -> item_width(rest, max_int(acc, ui.visible_len(x)))
-  }
+# widest item, for a uniform highlight bar (0 when there are none)
+fn item_width(items: [String]) : Int =
+  list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
 
 # ---- tiny local helpers ----
+# Index wrap-around. No stdlib equivalent: this is cursor movement,
+# not modulo — a negative index lands on the last element.
 fn wrap(i: Int, n: Int) : Int = match i {
   x if x < 0  -> n - 1
   x if x >= n -> 0
   x           -> x
 }
-fn max_int(a: Int, b: Int) : Int = if a >= b { a } else { b }
-
-fn list_len(xs: [a]) : Int =
-  match xs {
-    []           -> 0
-    [x, ...rest] -> 1 + list_len(rest)
-  }
-
-fn nth_or(xs: [String], i: Int, d: String) : String =
-  match xs {
-    []           -> d
-    [x, ...rest] -> if i == 0 { x } else { nth_or(rest, i - 1, d) }
-  }

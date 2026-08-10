@@ -1,0 +1,62 @@
+# Tests for the board widget — the card-moving operations, which are
+# the reason the board exists (they cross two lists, so no leaf widget
+# can express them) and the ones that do the most index arithmetic.
+
+import terevaka.widget.board
+import terevaka.term
+
+fn fixture() : board.Board = board.init(
+  [ board.column("todo",  75, [board.card("A-1", Feature, "one"),
+                               board.card("A-2", Bug,     "two")]),
+    board.column("doing", 83, [board.card("B-1", Chore,   "three")]) ],
+  20, 0)
+
+fn ref_of(c: Option[board.Card]) : String = match c {
+  Some(card) -> card.ref
+  None       -> "(none)"
+}
+
+test "board — the cursor starts on the first card of the first column" {
+  let b = fixture()
+  assert board.active_column(b) == 0
+  assert ref_of(board.selected_card(b)) == "A-1"
+}
+
+test "board — moving a card right carries the cursor with it" {
+  let moved = board.move_card_right(fixture())
+  assert board.active_column(moved) == 1          # follow the card
+  assert ref_of(board.selected_card(moved)) == "A-1"
+
+  # and it is gone from the source column
+  let back = board.update(moved, Left)
+  assert ref_of(board.selected_card(back)) == "A-2"
+}
+
+test "board — reordering swaps within the column" {
+  let b = board.move_card_down(fixture())
+  assert ref_of(board.selected_card(b)) == "A-1"  # cursor follows the card
+  assert ref_of(board.selected_card(board.update(b, Up))) == "A-2"
+}
+
+test "board — reordering past an end is a no-op" {
+  let b = fixture()
+  assert ref_of(board.selected_card(board.move_card_up(b))) == "A-1"
+}
+
+test "board — adding and removing keeps the cursor in range" {
+  let added = board.add_card(fixture(), "A-3", "three")
+  assert ref_of(board.selected_card(added)) == "A-3"
+
+  let emptied = board.remove_selected(board.remove_selected(board.remove_selected(added)))
+  assert ref_of(board.selected_card(emptied)) == "(none)"
+
+  # removing from an empty column does not fall over
+  assert ref_of(board.selected_card(board.remove_selected(emptied))) == "(none)"
+}
+
+test "board — navigation wraps across columns" {
+  let b = fixture()
+  assert board.active_column(board.update(b, Left)) == 1     # wraps to last
+  assert board.active_column(board.update(b, Right)) == 1
+  assert board.active_column(board.update(board.update(b, Right), Right)) == 0
+}
