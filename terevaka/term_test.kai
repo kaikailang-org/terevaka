@@ -1,0 +1,38 @@
+# Tests for the pure half of the terminal layer: the ANSI builders.
+#
+# The Ffi half is not covered here. raw_enable/raw_disable, rows/cols
+# and poll_key all need a real terminal — poll_key's end-of-input path
+# is covered instead by the `test-eof` target in the Makefile, which
+# runs a built app with its stdin closed.
+
+import terevaka.term
+import terevaka.ui
+import core.string
+
+test "term — escape sequences occupy no display columns" {
+  assert ui.visible_len(term.fg(31, "red")) == 3
+  assert ui.visible_len(term.bg(31, "red")) == 3
+  assert ui.visible_len(term.bold("red")) == 3
+  assert ui.visible_len(term.dim("red")) == 3
+  assert ui.visible_len(term.invert("red")) == 3
+}
+
+test "term — wrappers nest without losing the payload" {
+  assert ui.visible_len(term.bold(term.fg(31, "red"))) == 3
+  assert ui.visible_len(term.bg(52, term.bold(term.fg(31, "red")))) == 3
+}
+
+test "term — a wrapper leaves the content itself untouched" {
+  # the payload survives verbatim between the opening code and the reset
+  assert string.index_of(term.fg(31, "hello"), "hello") != None
+  assert string.index_of(term.goto(3, 7), "3;7H") != None
+}
+
+test "term — esc is one character, the sequences build on it" {
+  assert list.length(string.chars(term.esc())) == 1
+  assert string.starts_with(term.clear(), term.esc())
+  assert string.starts_with(term.home(), term.esc())
+  assert string.starts_with(term.clear_eol(), term.esc())
+  assert string.starts_with(term.hide_cursor(), term.esc())
+  assert string.starts_with(term.show_cursor(), term.esc())
+}

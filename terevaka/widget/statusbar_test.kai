@@ -1,0 +1,30 @@
+# Tests for the status bar — one rendered line whose separators only
+# appear BETWEEN hints, checked through visible_len so the ANSI codes
+# the hints carry do not count as columns.
+
+import terevaka.widget.statusbar
+import terevaka.ui
+
+test "statusbar — renders one line" {
+  let bar = statusbar.view([statusbar.hint("q", "quit")])
+  assert list.length(ui.render(bar)) == 1
+}
+
+test "statusbar — a single hint carries no separator" {
+  let bar = statusbar.view([statusbar.hint("q", "quit")])
+  # "q quit" — key, space, action, and nothing else
+  assert ui.visible_len(list.nth(ui.render(bar), 0).unwrap_or("")) == 6
+}
+
+test "statusbar — separators go between hints, not after" {
+  let one = statusbar.view([statusbar.hint("q", "quit")])
+  let two = statusbar.view([statusbar.hint("q", "quit"), statusbar.hint("j", "down")])
+  let w1 = ui.visible_len(list.nth(ui.render(one), 0).unwrap_or(""))
+  let w2 = ui.visible_len(list.nth(ui.render(two), 0).unwrap_or(""))
+  # second hint is "j down" (6 columns) plus one "  ·  " separator (5)
+  assert w2 - w1 == 11
+}
+
+test "statusbar — no hints renders an empty line" {
+  assert ui.visible_len(list.nth(ui.render(statusbar.view([])), 0).unwrap_or("x")) == 0
+}

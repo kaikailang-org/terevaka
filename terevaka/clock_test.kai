@@ -1,0 +1,38 @@
+# Tests for the clock helper.
+#
+# The Clock effect is handled here with a fixed instant rather than
+# left to the runtime, which makes the assertions exact instead of
+# shape-only — and is the point of `hhmmss_utc` carrying the effect in
+# its row rather than reading the clock behind the caller's back.
+
+import terevaka.clock
+import time
+import core.string
+
+# `at(secs)` — what the clock reads when the wall clock says `secs`
+# since the epoch.
+fn at(secs: Int) : String = handle {
+  clock.hhmmss_utc()
+} with Clock {
+  wall_now(resume)      -> resume(time.WallTime { secs: secs, nanos: 0 })
+  monotonic_now(resume) -> resume(time.instant_of_nanos(0))
+  sleep_ns(ns, resume)  -> resume(())
+}
+
+test "clock — formats the UTC time of day" {
+  assert at(0) == "00:00:00 UTC"                 # the epoch itself
+  assert at(3661) == "01:01:01 UTC"              # 1h 1m 1s in
+  assert at(86399) == "23:59:59 UTC"             # last second of the day
+}
+
+test "clock — only the time of day survives, not the date" {
+  # one day later reads the same; the helper reports no date
+  assert at(86400) == "00:00:00 UTC"
+  assert at(86400 + 3661) == at(3661)
+}
+
+test "clock — every field keeps two digits" {
+  let s = at(5)                                   # 00:00:05, not 0:0:5
+  assert s == "00:00:05 UTC"
+  assert string.length(s) == 12
+}

@@ -1,0 +1,44 @@
+# Tests for the confirm dialog — the Answer routing, since which key
+# ends the dialog and which merely moves the highlight is the whole
+# contract the app depends on.
+
+import terevaka.widget.confirm
+import terevaka.term
+
+fn answer(a: confirm.Answer) : String = match a {
+  Yes        -> "yes"
+  No         -> "no"
+  Pending(c) -> if c.on_yes { "pending:yes" } else { "pending:no" }
+}
+
+test "confirm — starts on Yes and moves without answering" {
+  let c = confirm.make("delete?")
+  assert answer(confirm.update(c, Right)) == "pending:no"
+  assert answer(confirm.update(c, Left)) == "pending:yes"
+  assert answer(confirm.update(c, Printable('l'))) == "pending:no"
+  assert answer(confirm.update(c, Printable('h'))) == "pending:yes"
+}
+
+test "confirm — Enter answers with the highlighted button" {
+  let c = confirm.make("delete?")
+  assert answer(confirm.update(c, Enter)) == "yes"
+
+  let on_no = match confirm.update(c, Right) {
+    Pending(next) -> next
+    _             -> c
+  }
+  assert answer(confirm.update(on_no, Enter)) == "no"
+}
+
+test "confirm — y/n answer directly and Esc is No" {
+  let c = confirm.make("delete?")
+  assert answer(confirm.update(c, Printable('y'))) == "yes"
+  assert answer(confirm.update(c, Printable('n'))) == "no"
+  assert answer(confirm.update(c, Esc)) == "no"
+}
+
+test "confirm — an unrelated key keeps the dialog open unchanged" {
+  let c = confirm.make("delete?")
+  assert answer(confirm.update(c, Printable('x'))) == "pending:yes"
+  assert answer(confirm.update(c, Tick)) == "pending:yes"
+}

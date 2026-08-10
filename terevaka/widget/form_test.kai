@@ -1,0 +1,50 @@
+# Tests for the form controls — checkbox toggling, the radio group's
+# cursor-vs-chosen split (the part that is easy to get wrong), and the
+# button's key contract.
+
+import terevaka.widget.form
+import terevaka.term
+
+test "checkbox — Space toggles, other keys do not" {
+  let c = form.checkbox("wrap", false)
+  assert form.checkbox_update(c, Printable(' ')).checked
+  assert not form.checkbox_update(c, Enter).checked
+  assert not form.checkbox_update(c, Printable('x')).checked
+}
+
+test "checkbox — toggle is its own inverse" {
+  let c = form.checkbox("wrap", true)
+  assert form.toggle(form.toggle(c)).checked == c.checked
+}
+
+test "radio — moving the cursor does not change the choice" {
+  let r = form.radio(["one", "two", "three"])
+  assert form.radio_chosen(r) == 0
+
+  let moved = form.radio_update(r, Down)
+  assert form.radio_chosen(moved) == 0            # still the first
+  assert form.radio_chosen_label(moved) == "one"
+}
+
+test "radio — Space and Enter commit the highlighted option" {
+  let r = form.radio_update(form.radio(["one", "two", "three"]), Down)
+  assert form.radio_chosen(form.radio_update(r, Enter)) == 1
+  assert form.radio_chosen_label(form.radio_update(r, Printable(' '))) == "two"
+}
+
+test "radio — the cursor wraps around the ends" {
+  let r = form.radio(["one", "two", "three"])
+  let up = form.radio_update(r, Up)
+  assert form.radio_chosen_label(form.radio_update(up, Enter)) == "three"
+}
+
+test "radio — an empty group has no label to report" {
+  assert form.radio_chosen_label(form.radio([])) == ""
+}
+
+test "button — Enter and Space press, nothing else does" {
+  assert form.button_pressed(Enter)
+  assert form.button_pressed(Printable(' '))
+  assert not form.button_pressed(Printable('x'))
+  assert not form.button_pressed(Tick)
+}

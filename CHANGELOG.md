@@ -28,6 +28,13 @@ the surface is pre-1.0 (every release may break shape).
   `Eof` in the runtime rather than leaving it to the app, since an app
   that ignores it burns a core.
 
+- **Backspace deleted a byte, not a glyph.** `input.drop_last` sliced
+  the last byte off the field with `string.length` / `string.slice`,
+  which are byte-indexed — so backspacing over `你好` left a broken
+  half-codepoint behind instead of `你`. It now drops the last of
+  `string.chars`, which iterates real codepoints. Found by writing the
+  input widget's first test, not by using it.
+
 ### Changed
 
 - **BREAKING: `term.Key` gains an `Eof` variant.** An exhaustive
@@ -42,6 +49,22 @@ the surface is pre-1.0 (every release may break shape).
 - **The README no longer calls v0.2 blocked.** The upstream reactor gap
   closed; the remaining gate is measuring raw byte-at-a-time reads on a
   TTY, which the two stale mentions now point at instead.
+
+### Added
+
+- **Every module now has tests** — `app`, `clock`, `term` and the five
+  widgets that had none (confirm, form, input, popup, statusbar), on
+  top of the ui/menu/listbox/board files: 51 test blocks across 12
+  files, up from 17 across 4.
+
+  Two of them are worth calling out. `clock` handles the `Clock` effect
+  with a fixed instant instead of reading the wall clock, so it asserts
+  exact output (`at(3661) == "01:01:01 UTC"`) rather than a shape —
+  which is what carrying the effect in the row buys you. And `term`
+  covers only the ANSI builders: raw mode, geometry and `poll_key` need
+  a real terminal, so the loop's end-of-input path is covered by
+  `test-eof` instead, and the rest is exercised by the examples
+  building on every `make`.
 
 ## [0.1.3] - 2026-08-10
 

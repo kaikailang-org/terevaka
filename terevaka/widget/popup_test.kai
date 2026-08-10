@@ -1,0 +1,34 @@
+# Tests for the popup — the dismissal contract and the frame's shape,
+# since it is drawn as an overlay and its height decides what the base
+# UI shows around it.
+
+import terevaka.widget.popup
+import terevaka.ui
+import terevaka.term
+
+test "popup — Enter, Esc and q dismiss it; nothing else does" {
+  assert popup.dismissed(Enter)
+  assert popup.dismissed(Esc)
+  assert popup.dismissed(Printable('q'))
+  assert not popup.dismissed(Printable('x'))
+  assert not popup.dismissed(Tick)
+}
+
+test "popup — the frame is the body plus two border lines" {
+  let p = popup.make("about", ["one", "two"])
+  assert list.length(ui.render(popup.view(p))) == 4
+}
+
+test "popup — an empty body still frames" {
+  let p = popup.make("about", [])
+  assert list.length(ui.render(popup.view(p))) == 2
+}
+
+test "popup — body lines are framed, not measured out of the box" {
+  let p = popup.make("about", ["hola"])
+  let lines = ui.render(popup.view(p))
+  # every line of a box is the same width, borders included
+  let w0 = ui.visible_len(list.nth(lines, 0).unwrap_or(""))
+  let w1 = ui.visible_len(list.nth(lines, 1).unwrap_or(""))
+  assert w0 == w1
+}

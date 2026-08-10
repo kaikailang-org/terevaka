@@ -1,0 +1,28 @@
+# Tests for the app runtime's pure surface: the Step a user's `update`
+# returns.
+#
+# The loop itself is not covered here and cannot be: `run` and
+# `run_overlay` take over the terminal (raw mode, repaint, teardown),
+# so exercising them needs a real process rather than a test block.
+# What covers the loop instead:
+#   - `test-eof` in the Makefile, for the end-of-input exit path;
+#   - the examples, which are built on every `make`.
+
+import terevaka.app
+import terevaka.ui
+
+fn decision(s: app.Step[Int]) : String = match s {
+  Continue(m) -> "continue:#{m}"
+  Quit        -> "quit"
+}
+
+test "app — keep carries the next model, quit carries none" {
+  assert decision(app.keep(7)) == "continue:7"
+  assert decision(app.quit()) == "quit"
+}
+
+test "app — keep threads the model unchanged" {
+  # what a no-op update does: hand back the model it was given
+  assert decision(app.keep(0)) == "continue:0"
+  assert decision(app.keep(-1)) == "continue:-1"
+}

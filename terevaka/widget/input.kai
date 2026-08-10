@@ -55,7 +55,13 @@ pub fn view(lbl: String, i: Input) : Ui = {
 }
 
 # ---- local helpers ----
+# Backspace deletes a GLYPH, not a byte. `string.length` and
+# `string.slice` are byte-indexed, so slicing one off the end splits a
+# multibyte codepoint and leaves mojibake behind; `string.chars`
+# iterates real codepoints, so dropping the last of those is the edit
+# the user asked for.
 fn drop_last(s: String) : String = {
-  let n = string.length(s)
-  if n == 0 { "" } else { string.slice(s, 0, n - 1) }
+  let cs = string.chars(s)
+  let n = list.length(cs)
+  if n == 0 { "" } else { string.from_chars(list.take(cs, n - 1)) }
 }

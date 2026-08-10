@@ -1,0 +1,53 @@
+# Tests for the input widget — editing and the Outcome routing, plus
+# the multibyte edge, since backspace works on the text as a string.
+
+import terevaka.widget.input
+import terevaka.term
+
+fn typed(i: input.Input, s: [Char]) : input.Input = match s {
+  []           -> i
+  [c, ...rest] -> match input.update(i, Printable(c)) {
+                    Editing(next) -> typed(next, rest)
+                    _             -> i
+                  }
+}
+
+fn text_of(o: input.Outcome) : String = match o {
+  Editing(i) -> input.value(i)
+  Done(s)    -> s
+  Cancelled  -> "(cancelled)"
+}
+
+test "input — typing appends and backspace removes" {
+  let i = typed(input.init(), ['a', 'b', 'c'])
+  assert input.value(i) == "abc"
+  assert text_of(input.update(i, Backspace)) == "ab"
+}
+
+test "input — backspace on an empty field is a no-op" {
+  assert text_of(input.update(input.init(), Backspace)) == ""
+}
+
+test "input — backspace removes a whole multibyte glyph" {
+  let i = typed(input.init(), ['你', '好'])
+  assert input.value(i) == "你好"
+  assert text_of(input.update(i, Backspace)) == "你"
+}
+
+test "input — Enter commits the text, Esc discards it" {
+  let i = typed(input.with_text("hola"), [])
+  assert text_of(input.update(i, Enter)) == "hola"
+  assert text_of(input.update(i, Esc)) == "(cancelled)"
+}
+
+test "input — focus is state, not content" {
+  let i = input.with_text("x")
+  assert input.value(input.focus(i)) == "x"
+  assert input.value(input.blur(input.focus(i))) == "x"
+}
+
+test "input — unhandled keys leave the field untouched" {
+  let i = input.with_text("keep")
+  assert text_of(input.update(i, Tick)) == "keep"
+  assert text_of(input.update(i, Eof)) == "keep"
+}
