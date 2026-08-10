@@ -154,18 +154,11 @@ pub fn render(u: Ui) : [String] =
   }
 
 # render a list of Uis and concatenate their line-lists
-fn render_all(kids: [Ui]) : [String] =
-  match kids {
-    []           -> []
-    [k, ...rest] -> render(k) ++ render_all(rest)
-  }
+fn render_all(kids: [Ui]) : [String] = list.flat_map(kids, render)
 
 # indent every line of a block by n spaces
 fn pad_lines(lines: [String], n: Int) : [String] =
-  match lines {
-    []           -> []
-    [l, ...rest] -> [spaces(n) ++ l, ...pad_lines(rest, n)]
-  }
+  lines | (l) => spaces(n) ++ l
 
 # Row: lay children side by side, MULTI-LINE. Each child renders to a
 # block of lines; we pad every block to a uniform width (its widest
@@ -180,14 +173,9 @@ fn render_row(kids: [Ui]) : [String] = {
 
 # render each child and pad its lines to the block's own width
 fn blockify(kids: [Ui]) : [[String]] =
-  match kids {
-    []           -> []
-    [k, ...rest] -> {
-      let lines = render(k)
-      let w = max_width(lines)
-      [pad_block_width(lines, w), ...blockify(rest)]
-    }
-  }
+  kids | (k) => block_of(render(k))
+
+fn block_of(lines: [String]) : [String] = pad_block_width(lines, max_width(lines))
 
 # widest line of a block, in display columns (0 for an empty block)
 fn max_width(lines: [String]) : Int =

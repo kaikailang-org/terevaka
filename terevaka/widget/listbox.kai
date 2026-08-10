@@ -54,11 +54,10 @@ pub fn view(l: List) : Ui = {
   ui.col(rows ++ [scroll_hint(l.offset, l.height, n)])
 }
 
+# `base` is the index of the first visible item, so base + i is the
+# absolute index the cursor is compared against.
 fn render_rows(items: [String], cursor: Int, base: Int, w: Int) : [Ui] =
-  match items {
-    []           -> []
-    [x, ...rest] -> [item_row(x, base == cursor, w), ...render_rows(rest, cursor, base + 1, w)]
-  }
+  list.map_indexed(items, (i, x) => item_row(x, base + i == cursor, w))
 
 fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
   if sel {

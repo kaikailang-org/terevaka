@@ -40,13 +40,10 @@ pub fn update(m: Menu, k: term.Key) : Menu =
 fn with_cursor(m: Menu, c: Int) : Menu = Menu { items: m.items, cursor: c }
 
 # view: each item a row; selected gets the highlight bar.
-pub fn view(m: Menu) : Ui = ui.col(rows(m.items, m.cursor, 0, item_width(m.items)))
-
-fn rows(items: [String], cursor: Int, i: Int, w: Int) : [Ui] =
-  match items {
-    []           -> []
-    [x, ...rest] -> [item_row(x, i == cursor, w), ...rows(rest, cursor, i + 1, w)]
-  }
+pub fn view(m: Menu) : Ui = {
+  let w = item_width(m.items)
+  ui.col(list.map_indexed(m.items, (i, x) => item_row(x, i == m.cursor, w)))
+}
 
 fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
   if sel {

@@ -157,31 +157,25 @@ pub fn remove_selected(b: Board) : Board = {
 # ---- view: the columns side by side, the active one highlighted,
 # each stretched to the board's inner height. ----
 pub fn view(b: Board) : Ui =
-  ui.columns(col_panels(b.columns, b.active, b.width, b.height, 0))
+  ui.columns(col_panels(b.columns, b.active, b.width, b.height))
 
-fn col_panels(cols: [Column], active: Int, w: Int, h: Int, i: Int) : [Ui] =
-  match cols {
-    []           -> []
-    [c, ...rest] -> [col_panel(c, i == active, w, h), ...col_panels(rest, active, w, h, i + 1)]
-  }
+fn col_panels(cols: [Column], active: Int, w: Int, h: Int) : [Ui] =
+  list.map_indexed(cols, (i, c) => col_panel(c, i == active, w, h))
 
 fn col_panel(c: Column, is_active: Bool, w: Int, h: Int) : Ui = {
   let ttl   = "#{c.title} (#{list.length(c.cards)})"
   let color = if is_active { 44 } else { c.color }
-  ui.box_filled(color, w, h, ttl, card_list(c.cards, c.cursor, is_active, w, 0))
+  ui.box_filled(color, w, h, ttl, card_list(c.cards, c.cursor, is_active, w))
 }
 
-fn card_list(cards: [Card], cursor: Int, active_col: Bool, w: Int, i: Int) : Ui =
-  match cards {
-    []           -> ui.muted("(empty)")
-    [_c, ..._r]  -> ui.col(card_rows(cards, cursor, active_col, w, i))
-  }
+fn card_list(cards: [Card], cursor: Int, active_col: Bool, w: Int) : Ui =
+  if list.is_empty(cards) { ui.muted("(empty)") }
+  else { ui.col(card_rows(cards, cursor, active_col, w)) }
 
-fn card_rows(cards: [Card], cursor: Int, active_col: Bool, w: Int, i: Int) : [Ui] =
-  match cards {
-    []           -> []
-    [c, ...rest] -> card_lines(c, i == cursor, active_col, w) ++ card_rows(rest, cursor, active_col, w, i + 1)
-  }
+# each card contributes two lines, so the per-card blocks are
+# concatenated rather than mapped one-to-one.
+fn card_rows(cards: [Card], cursor: Int, active_col: Bool, w: Int) : [Ui] =
+  list.concat(list.map_indexed(cards, (i, c) => card_lines(c, i == cursor, active_col, w)))
 
 # each card = 2 lines: "[REF] <marker>" then the title, truncated to
 # the box's inner content width (w - 4: two border + two padding cols).

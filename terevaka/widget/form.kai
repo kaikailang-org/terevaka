@@ -64,13 +64,10 @@ fn choose(r: Radio) : Radio =
   Radio { options: r.options, cursor: r.cursor, chosen: r.cursor }
 
 pub fn radio_view(r: Radio, focused: Bool) : Ui =
-  ui.col(radio_rows(r.options, r.cursor, r.chosen, focused, 0))
+  ui.col(radio_rows(r.options, r.cursor, r.chosen, focused))
 
-fn radio_rows(opts: [String], cursor: Int, chosen: Int, focused: Bool, i: Int) : [Ui] =
-  match opts {
-    []           -> []
-    [o, ...rest] -> [radio_row(o, i == cursor, i == chosen, focused), ...radio_rows(rest, cursor, chosen, focused, i + 1)]
-  }
+fn radio_rows(opts: [String], cursor: Int, chosen: Int, focused: Bool) : [Ui] =
+  list.map_indexed(opts, (i, o) => radio_row(o, i == cursor, i == chosen, focused))
 
 fn radio_row(lbl: String, on_cursor: Bool, is_chosen: Bool, focused: Bool) : Ui = {
   let dot = if is_chosen { term.fg(83, "(o)") } else { term.fg(245, "( )") }
