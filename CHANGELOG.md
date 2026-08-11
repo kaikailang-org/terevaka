@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
-## [Unreleased]
+## [0.1.4] - 2026-08-10
 
 ### Fixed
 
