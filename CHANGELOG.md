@@ -46,9 +46,14 @@ the surface is pre-1.0 (every release may break shape).
   the demo with a closed stdin under a five-second alarm. It cannot be
   a `kai test` case — it needs a real process whose stdin is closed —
   and the alarm is load-bearing: on regression the app never returns.
-- **The README no longer calls v0.2 blocked.** The upstream reactor gap
-  closed; the remaining gate is measuring raw byte-at-a-time reads on a
-  TTY, which the two stale mentions now point at instead.
+- **v0.2 is unblocked, and the README says so with a measurement
+  behind it.** The reactor's stdin phase closed the upstream gap
+  (kaikai #620), and `tools/raw_park_probe` now demonstrates the case
+  terevaka actually needs: under a real pty with raw mode on, a reader
+  fiber on `Stdin.read_bytes(1)` parks while a ticker fiber keeps
+  running, and still receives the keystroke afterwards. What stands
+  between here and the fiber architecture is the design work, not a
+  dependency.
 
 ### Added
 

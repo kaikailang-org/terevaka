@@ -1,0 +1,26 @@
+# Does a fiber reading stdin park while OTHER fibers run — in raw mode,
+# byte at a time, on a real tty? That is the v0.2 gate.
+import terevaka.term
+import spawn
+import time
+
+fn ticker(n: Int, acc: Int) : Int / Clock + Ffi =
+  if n <= 0 { acc } else {
+    time.sleep(time.millis(100))
+    term.write("tick #{acc}\r\n")
+    ticker(n - 1, acc + 1)
+  }
+
+fn reader() : String / Stdin = Stdin.read_bytes(1)
+
+fn main() : Int / Ffi + Spawn + Clock + Stdin = {
+  term.raw_enable()
+  term.write("raw mode on\r\n")
+  let r = spawn.spawn(reader)
+  let ticks = ticker(6, 0)
+  term.write("ticker done: #{ticks} ticks while the reader waited\r\n")
+  let got = spawn.await(r)
+  term.write("reader got: [#{got}]\r\n")
+  term.raw_disable()
+  0
+}

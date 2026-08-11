@@ -11,9 +11,8 @@ web, terevaka is for the terminal.
 > compile and run on `kai 0.111.0`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget a supervised `ahu.cell`) is
-> **v0.2**. The upstream blocker (raw-mode-on-the-reactor) has since
-> closed; what remains is one measurement — see §*What's a value vs
-> what's deferred*.
+> **v0.2**. The upstream blocker (raw-mode-on-the-reactor) has closed
+> and the close is measured — see §*What's a value vs what's deferred*.
 
 The name is the highest volcano of Rapa Nui — the point from which
 you see the whole island. The metaphor: a TUI is the vantage from
@@ -130,20 +129,22 @@ raw read froze the whole scheduler (measured — see `spike/README.md`)
 concurrent panels) is reachable that way — the clock demo proves it —
 but via poll, not fibers.
 
-**That gap has since closed upstream.** The reactor's stdin phase
-shipped (kaikai #620, under the #474 parent), and a fiber blocked on
-`Stdin.read_bytes` now parks instead of freezing the scheduler —
-verified on kai 0.111.0 with a reader fiber and a ticker fiber, where
-the ticker kept running while the reader waited on input that never
-came.
+**That gap has since closed upstream, and the close is measured.** The
+reactor's stdin phase shipped (kaikai #620, under the #474 parent), and
+on kai 0.111.0 a fiber reading stdin parks instead of freezing the
+scheduler — including the case terevaka actually needs: raw mode, one
+byte at a time, on a real tty.
 
-One measurement is still owed before v0.2 starts: that check ran with
-stdin on a pipe, not on a TTY in raw mode. termios governs the driver's
-line discipline rather than the fd-readiness path the reactor watches,
-so the mechanism should carry over, but "should" is not "measured".
+The check runs a reader fiber (`Stdin.read_bytes(1)`) alongside a
+ticker fiber under a pty with `raw_enable()` in effect. The ticker
+completes its ticks while the reader waits, and the reader then
+receives the keystroke sent to it — so the read parks the fiber rather
+than the scheduler, which is the property v0.1's `poll()` loop exists
+to work around.
 
-v0.2, once that is confirmed: widgets become `ahu.cell`s, the input
-pump and render become sibling fibers under a nursery, and the
+v0.2 is therefore unblocked, and what remains is design work rather
+than a dependency: widgets become `ahu.cell`s, the input pump and
+render become sibling fibers under a nursery, and the
 spinner-during-task pattern (verified in `docs/design.md`) wires into
 a real interactive app.
 
@@ -161,8 +162,8 @@ a real interactive app.
   threaded by the app, not fibers (see *What's a value vs deferred*).
   The clock/spinner tick via the poll loop; a spinner *during a real
   in-flight request*, a live `tail -f`, or panels at independent rates
-  need the fiber architecture — v0.2, whose upstream blocker has closed
-  and which now waits on one measurement (see the section above).
+  need the fiber architecture — v0.2, now unblocked (see the section
+  above): what remains is the work, not a dependency.
 - **No mouse, no resize handling (`SIGWINCH`).** Keyboard-first.
 - **UTC clock only** (no localtime in stdlib yet).
 
