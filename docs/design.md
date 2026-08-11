@@ -5,11 +5,17 @@ terevaka is the terminal face of the lnds ecosystem — the way a
 kaikai program presents an interactive interface in a terminal,
 the same way `manutara` presents one over HTTP.
 
-> **Status:** not started. This document pins the *direction*
-> before any code lands. The load-bearing claims (structured
-> concurrency for UI tasks, the reactor parking stdin/clock fibers)
-> are verified against `kai 0.84.0` — see §*The reactor* and
-> §*The concurrency gate*.
+> **Status:** partly built. v0.1 ships Level 1 (the `Ui` value tree,
+> the terminal layer, eight widgets, a Model/update/view runtime) with
+> widgets as plain values threaded by the app; Levels 2 and 3 — widgets
+> as actors, capabilities as rows — are the v0.2 target.
+>
+> The load-bearing claims were first verified against `kai 0.84.0` and
+> re-verified on **0.111.0**, which is what §*The concurrency model
+> this design targets* now describes. That section is the one to read
+> first: parallel-by-default fibers, cooperative cancellation and
+> non-selective receive all constrain the design in ways the original
+> draft did not account for.
 
 ## The name
 
@@ -140,15 +146,31 @@ fn header(s: AppState) : Ui =
   box(single, row([ text(title_style, s.title), spacer(), clock(s.now) ]))
 ```
 
-### Level 2 — live, stateful widget → an ahu CELL (fiber + mailbox)
+### Level 2 — live, stateful widget → an ACTOR (fiber + mailbox)
 
 A `TextInput` that remembers its cursor, a `List` with a selection,
 a panel doing `tail -f` — state that lives over time and may run
-concurrently. This **is `ahu.cell`**, reused, not reinvented:
-`step: (State, Msg) -> StepResult[State] / e`. The state lives
-*inside* the fiber (no global `Model`); the mailbox type is the set
-of events the widget accepts; supervision means a crashed widget is
-revived by `restartable_cell` without taking down its siblings.
+concurrently. The state lives *inside* the fiber (no global `Model`);
+the mailbox type is the set of events the widget accepts; a crashed
+widget is restarted without taking down its siblings.
+
+Two layers supply this, and the split matters:
+
+- **The stdlib supplies the actor.** `Actor[Msg]` is an effect with
+  `send` / `receive` / `self`, a private mailbox per fiber, and
+  BEAM-style heap isolation — messages are copied, never aliased.
+  `spawn_actor` / `with_mailbox` install it, `MailboxPolicy` sets
+  bounds and backpressure (`Bounded(cap, BlockSender)` parks the
+  sender). Supervision primitives — `Monitor`, `Link`, trap-exit —
+  are stdlib too. None of this needs a dependency.
+- **`ahu` supplies what sits on top**: `with_cell` wraps the
+  receive-loop-over-state as `step: (State, Msg) -> StepResult[State]`,
+  `ask` is request/reply, and `restartable_cell` adds restart policies
+  (`Permanent` / `Transient` / `Temporary`, limits, backoff). These
+  are the parts the stdlib deliberately leaves out.
+
+So a widget is an actor; `ahu` is how we avoid hand-rolling its loop
+and its restart policy.
 
 ```kai
 type InputMsg = Key(Char) | Backspace | GetValue(Pid[InputReply])
@@ -215,14 +237,45 @@ fn paint(ui: Ui)   : Unit / Render     # effect: the runtime does it
   (a game canvas, a 10k-point plot where building the tree does not
   pay). One effect, two handlers — a thing no other TUI can say.
 
+## The concurrency model this design targets
+
+Four properties of kaikai's runtime shape everything below. They are
+current as of **kai 0.111.0**; re-read `kai info fibers` and
+`kai info actors` before trusting this section, since the earlier
+version of this document was written against 0.84.0 and drifted.
+
+1. **Fibers park, they do not block.** The reactor (R1 file/sleep/
+   process, R2 TCP, R3 stdin, R4 signal) parks a fiber on I/O without
+   freezing the OS thread. Verified for the case terevaka needs — raw
+   mode, byte at a time, on a real tty — by `tools/raw_park_probe`.
+2. **Fibers run in PARALLEL by default**, across as many OS threads as
+   the host has cores, with work stealing (`KAI_THREADS` to override;
+   `=1` restores the cooperative single-thread scheduler). Two
+   consequences the old design missed: messages crossing a thread
+   boundary are physically copied, and the *order* independent fibers
+   interleave is not stable — only causally ordered output is. A
+   golden-frame test must therefore compare a frame assembled by one
+   renderer, never the interleaving of panels that produced it.
+3. **Cancellation is COOPERATIVE — there is no preemption.**
+   `Spawn.cancel(f)` marks the target; the scheduler injects
+   `Cancel.raise()` at its next yield point. A widget that computes in
+   a tight loop with no yield point cannot be cancelled, and no resize
+   or quit will reach it. Widget authors must yield, and the framework
+   should say so rather than assume the scheduler will intervene.
+4. **`receive()` is not selective.** Pattern-selective receive
+   (`receive_match`) is deferred to a future edition, so a widget
+   cannot pick a message out of its mailbox and leave the rest. Its
+   `Msg` type must be a sum it can always handle in arrival order —
+   which rules out the "wait here for the reply, ignore keys meanwhile"
+   shape an actor might otherwise reach for.
+
 ## The concurrency gate (verified)
 
 terevaka's thesis requires that a fiber sleeping on `Clock` or
 blocked on `Input` does **not** block the scheduler — otherwise the
-spinner-during-request freezes. This is the reactor (R1 file/sleep/
-process, R2 TCP, R3 stdin, R4 signal), and it is **already shipped**
-in kaikai (`kai info fibers`). The gate — two fibers progressing
-concurrently, one sleeping, one working — passes on `kai 0.84.0`:
+spinner-during-request freezes. The gate — two fibers progressing
+concurrently, one sleeping, one working — passed originally on
+`kai 0.84.0`:
 
 ```kai
 import time
@@ -257,6 +310,12 @@ This is the spinner-during-request that is painful in Bubble Tea
 sibling fibers in a nursery, cancellation on scope exit. No tick
 scheduler, no command reification, no manual context threading.
 
+Re-verified on **0.111.0**, where the gate is stronger than when it
+was first written: the two fibers now run on different OS threads
+rather than interleaving cooperatively, and the terminal read parks
+in raw mode rather than only line-buffered. The property the design
+depends on holds in both scheduler modes.
+
 ## The application shape
 
 A terevaka app is a tree of nurseries = a supervision tree. The
@@ -285,6 +344,14 @@ state is in isolated fibers, not one `Model`.
 
 ## What v1 ships
 
+> **Reality check.** This list is the *original* v1 target, written
+> before any code landed. What shipped as v0.1 is item 1 plus a
+> non-fiber runtime: the `Ui` tree, the terminal layer, eight widgets
+> as plain values, and a poll-loop `app.run`. Items 3–6 describe the
+> v0.2 target, and item 2's diffing handler became a simpler
+> frame-comparison repaint. Kept here as the direction, not as a
+> claim about the current release — see the README for what exists.
+
 1. **The `Ui` value tree** (Level 1) — `Text` / `Row` / `Col` /
    `Box` / `Focusable`, with style, and a pure `view`.
 2. **The `Render` effect + a diffing terminal handler** — double-
@@ -292,8 +359,9 @@ state is in isolated fibers, not one `Model`.
    for tests.
 3. **The `Input` effect + an `input_pump` fiber** over the reactor's
    R3 stdin parking (keys, eventually resize via R4 `SIGWINCH`).
-4. **Live widgets as ahu cells** (Level 2) — a `TextInput` and a
-   `List` reference widget, each a `with_cell`.
+4. **Live widgets as actors** (Level 2) — a `TextInput` and a `List`
+   reference widget, each an `Actor[Msg]` whose loop is an
+   `ahu.with_cell`.
 5. **The nursery-rooted app shell** — `run(...)`, signal-driven
    graceful shutdown via `ahu.app.run_app`, the spinner-during-task
    pattern as the headline example.
@@ -315,43 +383,85 @@ state is in isolated fibers, not one `Model`.
 - **Animations framework.** An animation is just a fiber that emits
   frames on a `Clock`; a helper may land once the pattern recurs.
 
-## Foundational principle: terevaka builds on ahu
+## Foundational principle: build on the stdlib first, then ahu
 
-Like the rest of the stack, terevaka builds on **ahu**: stateful
-widgets are cells, supervision is restart helpers, the app shell is
-`ahu.app.run_app`, and concurrent panels are nursery-scoped fibers.
-Where a use case cannot be expressed through ahu/kaikai primitives,
-the gap is filed against the right layer — not worked around inside
-terevaka.
+Like the rest of the stack, terevaka reuses rather than reinvents —
+but the layer to reuse has moved since this was written. The order is:
+
+1. **kaikai's stdlib** for the actor itself: `Actor[Msg]`, mailboxes
+   and policies, `Monitor` / `Link` / trap-exit for observing a
+   child's death, nurseries for structured scope.
+2. **`ahu`** for what the stdlib leaves out: `with_cell`'s
+   state-and-step loop, `ask` for request/reply, and restart policies
+   with limits and backoff.
+3. **terevaka** for what neither has: the terminal, the `Ui` tree,
+   layout, and the widget set.
+
+Where a use case cannot be expressed through those primitives, the gap
+is filed against the right layer — as terevaka has done twice already
+(kaikai #1718, #1743) — not worked around inside terevaka.
 
 ## Open questions (to close before/with the first code lane)
 
-1. **Input encoding** — how keys/escape-sequences are modeled as the
-   `Input` effect's op result (a `Key` sum type; mapping terminfo /
-   ANSI escape sequences). Leaning: a `Key = Char(Char) | Enter |
-   Tab | Arrow(Dir) | Ctrl(Char) | ...` sum type, parsed by the
-   input pump.
-2. **Render diffing granularity** — cell-level vs line-level diff,
-   and how the `Dynamic(Pid)` holes (Level-1 leaves fed by Level-2
-   cells) are spliced into the frame without copying the whole tree
-   across the fiber boundary (the BEAM copy cost — see Risks).
+1. ~~**Input encoding**~~ — *closed by v0.1.* `term.Key` is the sum
+   type, assembled from bytes by `term.poll_key`; v0.1 also added the
+   case this section did not anticipate, `Eof`, which the runtime must
+   act on rather than pass to a handler. What remains open is only
+   whether the fiber form keeps `poll_key` or moves to a parked
+   `Stdin.read_bytes(1)` — the probe says either works.
+2. **Render diffing granularity** — cell-level vs line-level diff, and
+   how the `Dynamic(Pid)` holes (Level-1 leaves fed by Level-2 actors)
+   are spliced into the frame without copying the whole tree across the
+   fiber boundary. Now sharper than when written: with the multi-thread
+   scheduler, a panel and the renderer may sit on different threads, so
+   the copy is physical rather than an optimisable same-heap move.
 3. **Focus model** — `Focus` as an effect (request/release/next) vs
-   focus as state in a root cell. Leaning: a `Focus` effect handled
-   by a focus-manager fiber.
+   focus as state in a root actor. Leaning: a `Focus` effect handled by
+   a focus-manager fiber. Note the constraint from the model above: a
+   widget cannot selectively receive, so "hold this key until focus
+   returns" has to be state in the widget, not a message left unread in
+   the mailbox.
 4. **`SIGWINCH` / resize** — via reactor R4 signal parking; how a
    resize event reaches every panel (broadcast to mailboxes).
+5. **Cancellation discipline** *(new)* — cancellation is cooperative,
+   so a widget that computes without yielding cannot be cancelled and
+   will not see a resize or a quit. Open: whether the framework
+   documents "yield in long work" as a widget-author rule, or the cell
+   loop yields on the author's behalf between messages.
+6. **Supervision shape** *(new)* — the design predates `Monitor`,
+   `Link` and trap-exit being available. Open: whether a crashed panel
+   is observed by a supervisor actor via `Monitor`, or wrapped in
+   `ahu.restartable_cell`, and how the two compose. Note the trap-exit
+   caveat in `kai info fibers`: under trap-exit the runtime bypasses
+   the child's own `Cancel` handlers, so a panel's cleanup handler
+   provably does not run — which decides where a panel may hold a
+   resource it must release.
 
 ## Risks / dependencies (verified where possible)
 
 - **BEAM copy cost in the view.** Messages copy across fiber heaps.
   A large `Ui` crossing a fiber boundary each frame copies in full.
   Mitigation: *one* fiber (the renderer) assembles the final tree;
-  cells send small deltas / sub-trees, not whole frames. Gate: an
+  actors send small deltas / sub-trees, not whole frames. Gate: an
   N-panel dashboard must not scale copy cost with total frame size.
-  This is a real perf dependency to measure, not a deferral.
-- **The reactor.** *Resolved* — R1–R4 shipped (file/sleep/process,
-  TCP, stdin, signal); the concurrency gate passes on 0.84.0. This
+  This is a real perf dependency to measure, not a deferral — and the
+  multi-thread scheduler raises the stakes, since a cross-thread send
+  is always a physical copy while a same-thread send can transfer
+  ownership. Measure at `KAI_THREADS=1` *and* at the default.
+- **The reactor.** *Resolved and measured* — R1–R4 shipped
+  (file/sleep/process, TCP, stdin, signal); the gate passed on 0.84.0
+  and again on 0.111.0, where `tools/raw_park_probe` shows a fiber
+  parking on a raw-mode tty read while a sibling keeps running. This
   was the #1 technical blocker and it is closed.
+- **No preemption** *(new)*. A widget in a tight loop starves nothing
+  else — fibers run on N threads — but it cannot itself be cancelled
+  or resized until it yields. The risk is a third-party widget that
+  computes without yielding: the app cannot defend against it, so this
+  belongs in the widget-author contract.
+- **No selective receive** *(new)*. Deferred upstream to a future
+  edition. A widget's `Msg` type must be handleable in arrival order;
+  any "wait for this specific reply" logic becomes explicit state.
+  `ahu.ask` is the supported request/reply shape.
 - **One-shot resume.** kaikai's resume is one-shot, which fits input
   (read a key, resume once). Widgets that "listen to a stream of
   keys" are loop-in-fiber receiving from a mailbox, never multi-shot
