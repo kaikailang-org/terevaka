@@ -10,9 +10,9 @@ web, terevaka is for the terminal.
 > Model/update/view runtime with a flicker-free in-place repaint all
 > compile and run on `kai 0.112.1`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
-> `docs/design.md` (each live widget a supervised `ahu.cell`) is
-> **v0.2**. The upstream blocker (raw-mode-on-the-reactor) has closed
-> and the close is measured — see §*What's a value vs what's deferred*.
+> `docs/design.md` (each live widget its own actor) is **v0.2**. The
+> upstream blocker (raw-mode-on-the-reactor) has closed and the close
+> is measured — see §*What's a value vs what's deferred*.
 
 The name is the highest volcano of Rapa Nui — the point from which
 you see the whole island. The metaphor: a TUI is the vantage from
@@ -115,10 +115,12 @@ the component contract.
 ## What's a value vs what's deferred (honesty)
 
 The design (`docs/design.md`) has three levels: **L1** stateless
-leaves as values, **L2** live widgets as `ahu.cell` fibers, **L3**
-capabilities as effect rows. v0.1 ships **L1 in full** (the `Ui`
-tree) and the widgets as **plain-value state machines threaded by the
-app** — *not yet* as fibers.
+leaves as values, **L2** live widgets as actors — a fiber with a
+private mailbox, which the stdlib supplies (`Actor[Msg]`, mailbox
+policies, `Monitor` / `Link`) and `ahu` dresses with a state loop and
+restart policies — and **L3** capabilities as effect rows. v0.1 ships
+**L1 in full** (the `Ui` tree) and the widgets as **plain-value state
+machines threaded by the app** — *not yet* as fibers.
 
 Why: the design's headline is "every live concurrent task is a
 supervised fiber", which needs the input pump to be a fiber parked on
@@ -143,7 +145,7 @@ than the scheduler, which is the property v0.1's `poll()` loop exists
 to work around.
 
 v0.2 is therefore unblocked, and what remains is design work rather
-than a dependency: widgets become `ahu.cell`s, the input pump and
+than a dependency: widgets become actors, the input pump and
 render become sibling fibers under a nursery, and the
 spinner-during-task pattern (verified in `docs/design.md`) wires into
 a real interactive app.
