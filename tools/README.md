@@ -17,8 +17,7 @@ reader still receives the keystroke sent afterwards. If it parks the
 scheduler instead, the ticker produces nothing.
 
 ```sh
-CFLAGS="-std=c99 -O2 -include c/terevaka_term.h c/terevaka_term.c" \
-  kai build tools/raw_park_probe.kai -o build/raw_park_probe
+kai build tools/raw_park_probe.kai -o build/raw_park_probe
 python3 tools/raw_park_probe.py build/raw_park_probe
 ```
 
