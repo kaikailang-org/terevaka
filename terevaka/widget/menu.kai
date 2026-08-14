@@ -7,7 +7,7 @@
 #
 # This is a "Level 1.5" widget in the design's terms: it has state
 # (the cursor) but the state is a plain value threaded by the app,
-# not a fiber — the fiber/cell form is v0.2. The shape (State +
+# not a fiber — the actor form is v0.2. The shape (State +
 # update + view) is exactly what each widget exposes.
 
 import terevaka.ui

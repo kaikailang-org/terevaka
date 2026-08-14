@@ -8,8 +8,9 @@
 # Input is NON-BLOCKING (term.poll_key with a timeout) so a `Tick`
 # key arrives on idle and the view refreshes — letting a clock or
 # spinner advance without a keystroke. This is the spike's poll
-# bridge; the design's fiber form (input-pump fiber + widget cells
-# under a nursery) is v0.2, blocked on raw-mode-on-the-reactor.
+# bridge; the design's fiber form (input-pump fiber + widget actors
+# under a nursery) is v0.2. A raw read on the reactor parks the fiber
+# rather than the scheduler, so what remains there is the work.
 #
 # `run` is generic over the user's model type `m` via passed
 # functions — no HKT needed, just `(m, Key) -> Step[m]` and
