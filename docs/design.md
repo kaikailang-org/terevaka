@@ -316,6 +316,33 @@ rather than interleaving cooperatively, and the terminal read parks
 in raw mode rather than only line-buffered. The property the design
 depends on holds in both scheduler modes.
 
+### Why v0.1 polls instead: the blocking-FFI finding
+
+The gate above covers fibers that sleep. Reading the terminal was a
+different story, and it is why v0.1 ships a `poll()` loop rather than
+the design's input-pump fiber: **a blocking FFI `read()` froze the
+whole scheduler.** Measured directly — a ticker fiber (`time.sleep` +
+print) beside a reader fiber blocked on a C `read()`:
+
+```
+tick 0
+reader: blocking on read()...
+reader: got 122          ← 2 seconds later
+tick 1                   ← the ticker only now resumes
+```
+
+A blocking FFI call is opaque to the scheduler: it parks the OS
+thread, not the fiber. What the design needs is input parked on the
+*reactor*, and at the time the reactor parked only `Stdin.read_line`
+/ `read_bytes` — line-buffered, not the raw byte-at-a-time reads a
+TUI takes. `poll()` with a timeout was the honest bridge: one loop
+checks for input without committing to a blocking read, so the clock
+still ticks.
+
+That gap has since closed — see the raw-mode re-verification above
+and `tools/README.md` for the probe that measures it — so what keeps
+v0.1 on `poll()` is the migration work, not the runtime.
+
 ## The application shape
 
 A terevaka app is a tree of nurseries = a supervision tree. The
