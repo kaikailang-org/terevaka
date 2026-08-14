@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Added
+
+- **The terminal shim travels with the package.** `kai.toml` declares
+  `c/terevaka_term.c` in a `[native]` table, so the driver compiles and
+  links it for every verb — `build`, `run`, `test`, `install` — on both
+  backends. A consumer now writes `kai add
+  github.com/kaikailang-org/terevaka` followed by `kai build .` and is
+  done: no `Makefile`, no `CFLAGS`, and `kai install
+  github.com/owner/app` works on an app that depends on terevaka, which
+  it could not before. The header is not declared alongside the source
+  because the compiler emits its own declarations from the FFI
+  signatures; `include = ["c"]` stays for the `.c` itself.
+
+  Requires kai 0.112.0 or newer, where `[native]` landed. Verified
+  against 0.112.1 with an external consumer (`lnds/mark`): bare `kai
+  build .` produces a working binary and `kai test .` runs its 53 tests,
+  both with an empty `CFLAGS`.
+
+### Changed
+
+- **BREAKING: passing the shim in `CFLAGS` now breaks the link.** There
+  is no deduplication between the two channels — the same translation
+  unit arriving from both `[native]` and `CFLAGS` is compiled and linked
+  twice, and the build dies with `ld: 6 duplicate symbols` naming
+  `kai_tvk_raw_enable` and its neighbours.
+
+  Every consumer written against 0.1.4 or earlier carries exactly that,
+  since it was the only way to link at all. **To migrate: delete the
+  shim from your `CFLAGS` and build with plain `kai build .`** — in
+  practice the whole `Makefile` goes, along with the awk that dug
+  terevaka's sha out of `kai.lock` to locate the shim in the package
+  cache. Setting `KAI_NATIVE_DEPS=0` turns the `[native]` channel off
+  and restores the old behaviour for a build that cannot be changed
+  yet.
+
+  terevaka's own `Makefile` no longer passes it either; it now only
+  wires the dependency graph and the example binaries. The `spike/`
+  build is untouched — it binds its own shim (`kai_tui_*`), a separate
+  namespace from the framework's.
+
 ## [0.1.4] - 2026-08-10
 
 ### Fixed

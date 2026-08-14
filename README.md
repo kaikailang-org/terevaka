@@ -8,7 +8,7 @@ web, terevaka is for the terminal.
 > terminal layer (with robust size detection), eight widgets (menu,
 > listbox, input, form, popup, confirm, statusbar, board), and a
 > Model/update/view runtime with a flicker-free in-place repaint all
-> compile and run on `kai 0.111.0`. The full-screen kanban example
+> compile and run on `kai 0.112.1`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget a supervised `ahu.cell`) is
 > **v0.2**. The upstream blocker (raw-mode-on-the-reactor) has closed
@@ -170,11 +170,19 @@ a real interactive app.
 ## Build
 
 terevaka binds the terminal through a C shim (`c/terevaka_term.{c,h}`)
-the way `kohau` binds libsqlite3. `kai build` does not inject link
-flags, so the `Makefile` passes the shim through `CFLAGS`: the header
-via `-include`, the source as a plain translation unit the driver
-hands to the C compiler. Requirements: `kai` on `PATH` (verified
-against 0.111.0), a C compiler.
+the way `kohau` binds libsqlite3, and declares it in `kai.toml`'s
+`[native]` table:
+
+```toml
+[native]
+sources = ["c/terevaka_term.c"]
+include = ["c"]
+```
+
+`kai build` compiles and links it from there, so no target passes it
+by hand — the `Makefile` only wires up the dependency graph and the
+example binaries. Requirements: `kai` on `PATH` (needs 0.112.0 or
+newer for `[native]`; verified against 0.112.1), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
@@ -192,41 +200,30 @@ and is what CI uses.
 
 ## Using terevaka as a dependency
 
-`kai add github.com/kaikailang-org/terevaka` resolves the import, but
-that is not enough to link: the C shim is not part of the package as
-far as `kai build` is concerned, so the build fails with undefined
-`kai_tvk_*` symbols. The consumer passes the shim in `CFLAGS` the same
-way this repo does, pointing at the copy inside the package cache:
-
-```make
-# Package cache root. `kai` honours $KAIKAI_CACHE; the default is
-# ~/Library/Caches/kai/pkg on macOS, ~/.cache/kai/pkg on Linux.
-KAIKAI_CACHE ?= $(HOME)/Library/Caches/kai/pkg
-
-TVK_SHA  := $(shell awk '/^name = "terevaka"/{f=1} f && /^sha = /{gsub(/[",]/,"",$$3); print $$3; exit}' kai.lock)
-TVK_ROOT := $(KAIKAI_CACHE)/github.com/kaikailang-org/terevaka/$(TVK_SHA)
-KAI_CFLAGS := -std=c99 -O2 -include $(TVK_ROOT)/c/terevaka_term.h $(TVK_ROOT)/c/terevaka_term.c
-
-build/app: $(SRC) kai.lock
-	mkdir -p build
-	CFLAGS="$(KAI_CFLAGS)" kai build . -o $@
+```sh
+kai add github.com/kaikailang-org/terevaka
+kai build .
 ```
 
-Two details that bite. Derive the sha from `kai.lock` rather than
-hardcoding the path — a hardcoded one breaks on the next `kai update`.
-And give `KAIKAI_CACHE` a default: the variable is not exported unless
-you set it, so a recipe that reads it bare expands to an empty prefix
-and the include path silently points at `/github.com/...`.
+That is the whole story: the shim rides along in the package's
+`[native]` table, so `build`, `run`, `test` and `install` all link it
+without the consumer knowing it exists. An app depending on terevaka
+needs no `Makefile` and installs with
+`kai install github.com/owner/app`.
 
-If `kai build` ever grows a way for a package to declare its own link
-inputs, that supersedes all of this.
+**Do not also pass the shim in `CFLAGS`.** There is no
+deduplication — the same translation unit arriving twice links two
+copies and the build dies on duplicate `kai_tvk_*` symbols. A
+consumer written against terevaka 0.1.4 or earlier carries exactly
+that in its `Makefile` and must drop it; `KAI_NATIVE_DEPS=0` restores
+the old behaviour for a build that cannot be changed yet.
 
 ## Layout
 
 ```
 terevaka/
 ├── kai.toml
-├── Makefile                  # shim in CFLAGS → kai build
+├── Makefile                  # examples + tests; the shim rides in kai.toml
 ├── docs/design.md            # the architecture (incl. the fiber v0.2 plan)
 ├── c/terevaka_term.{c,h}     # terminal shim (raw mode, poll, write, size)
 ├── terevaka/                 # the importable modules

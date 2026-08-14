@@ -4,12 +4,20 @@ edition = "hanga-roa"
 
 [dependencies]
 
-# terevaka v0.1 has no kaikai-package dependencies. It binds the
-# terminal through a C shim (c/terevaka_term.{c,h}) the way kohau
-# binds libsqlite3 — `kai build` does not inject link flags, so the
-# build is driven by the Makefile, which passes the shim in CFLAGS.
-# The ahu dependency (cells / restart for the fiber architecture)
-# arrives in v0.2 once raw-mode-on-reactor unblocks the input pump.
+# terevaka v0.1 has no kaikai-package dependencies. The ahu dependency
+# (cells / restart for the fiber architecture) arrives in v0.2 once
+# raw-mode-on-reactor unblocks the input pump.
+
+# The terminal shim travels with the package: every verb that links a
+# consumer — build, run, test, install — compiles it in, so nothing
+# downstream passes it by hand. Passing the same .c through CFLAGS as
+# well links two copies and fails on duplicate kai_tvk_* symbols;
+# KAI_NATIVE_DEPS=0 turns this channel off for a build that still does.
+# The header is not listed: the compiler emits its own declarations
+# from the FFI signatures. include is here for the .c itself.
+[native]
+sources = ["c/terevaka_term.c"]
+include = ["c"]
 
 [unstable]
 terevaka = true
