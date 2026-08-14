@@ -1,10 +1,9 @@
-# examples/demo/main.kai — the terevaka spike, rebuilt on the framework.
+# examples/demo/main.kai — menu + text input + popup + live clock.
 #
-# Same app as terevaka/spike/ (menu + text input + popup + live
-# clock), but now written against the terevaka package instead of
-# raw FFI + hand-rolled ANSI. This is the proof the framework is
-# usable: the app code is ~model + update + view, no terminal
-# plumbing, no manual box drawing.
+# The smallest app that exercises the whole framework, and the proof
+# it is usable: written against the terevaka package rather than raw
+# FFI and hand-rolled ANSI, the app code is ~model + update + view,
+# with no terminal plumbing and no manual box drawing.
 #
 # Build: make example   (from the repo root)
 # Run:   ./build/demo

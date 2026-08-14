@@ -125,7 +125,7 @@ machines threaded by the app** — *not yet* as fibers.
 Why: the design's headline is "every live concurrent task is a
 supervised fiber", which needs the input pump to be a fiber parked on
 the reactor. When v0.1 was written that was a stdlib gap — a blocking
-raw read froze the whole scheduler (measured — see `spike/README.md`)
+raw read froze the whole scheduler (measured — see `docs/design.md`)
 — so v0.1 uses a non-blocking `poll()` loop in one fiber instead. The
 *effect* the design promises (a clock that ticks without input,
 concurrent panels) is reachable that way — the clock demo proves it —
@@ -238,7 +238,7 @@ terevaka/
 │   ├── demo/main.kai         # menu + input + popup + live clock
 │   ├── gallery/main.kai      # split-pane, listbox, form, confirm, focus
 │   └── kanban/main.kai       # full-screen kanban board
-└── spike/                    # the original raw-FFI spike (kept for reference)
+└── tools/                    # the raw-mode parking probe (the v0.2 gate)
 ```
 
 ## License

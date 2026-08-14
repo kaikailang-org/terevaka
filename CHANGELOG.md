@@ -44,9 +44,21 @@ the surface is pre-1.0 (every release may break shape).
   yet.
 
   terevaka's own `Makefile` no longer passes it either; it now only
-  wires the dependency graph and the example binaries. The `spike/`
-  build is untouched — it binds its own shim (`kai_tui_*`), a separate
-  namespace from the framework's.
+  wires the dependency graph and the example binaries.
+
+### Removed
+
+- **The `spike/` directory.** It held the original raw-FFI prototype
+  that proved the terminal surface was reachable before the framework
+  existed — a single-file app with its own C shim (`kai_tui_*`), its
+  own `Makefile`, and prose pinned to `kai 0.84.0`. `examples/demo`
+  has been the same app on the real framework since v0.1, so the
+  repository shipped two implementations of raw mode, key decoding
+  and ANSI rendering, one of them dead. The measurement that earned
+  the spike its keep — a blocking FFI `read()` freezing the whole
+  scheduler, which is why v0.1 polls — now lives in `docs/design.md`
+  under the concurrency gate. The code stays in git history at
+  `46075f3`.
 
 ## [0.1.4] - 2026-08-10
 

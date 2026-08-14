@@ -1,10 +1,8 @@
 # Build output — linked binaries, generated C, shim objects.
 build/
-spike/build/
 *.o
 
-# Generated C and raw capture artifacts from the spike.
-spike/c/*.o
+# Raw terminal capture artifacts.
 *.raw
 
 # Compiler module cache, written beside the package manifest.
