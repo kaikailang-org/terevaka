@@ -46,6 +46,11 @@ the surface is pre-1.0 (every release may break shape).
   terevaka's own `Makefile` no longer passes it either; it now only
   wires the dependency graph and the example binaries.
 
+- **The stated compiler version is now 0.117.0**, verified by
+  rebuilding every example from clean and running `make test`: all
+  twelve test files and `test-eof` pass. `tools/raw_park_probe` still
+  shows the reader fiber parking under raw mode while the ticker runs.
+
 ### Fixed
 
 - **The status bar rendered empty on kai 0.117.0.** Its private helper
