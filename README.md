@@ -8,7 +8,7 @@ web, terevaka is for the terminal.
 > terminal layer (with robust size detection), eight widgets (menu,
 > listbox, input, form, popup, confirm, statusbar, board), and a
 > Model/update/view runtime with a flicker-free in-place repaint all
-> compile and run on `kai 0.112.1`. The full-screen kanban example
+> compile and run on `kai 0.117.0`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
 > `docs/design.md` (each live widget its own actor) is **v0.2**. The
 > upstream blocker (raw-mode-on-the-reactor) has closed and the close
@@ -184,7 +184,7 @@ include = ["c"]
 `kai build` compiles and links it from there, so no target passes it
 by hand — the `Makefile` only wires up the dependency graph and the
 example binaries. Requirements: `kai` on `PATH` (needs 0.112.0 or
-newer for `[native]`; verified against 0.112.1), a C compiler.
+newer for `[native]`; verified against 0.117.0), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
