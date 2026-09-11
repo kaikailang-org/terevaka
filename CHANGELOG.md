@@ -46,6 +46,20 @@ the surface is pre-1.0 (every release may break shape).
   terevaka's own `Makefile` no longer passes it either; it now only
   wires the dependency graph and the example binaries.
 
+### Fixed
+
+- **The status bar rendered empty on kai 0.117.0.** Its private helper
+  was named `one`. In package mode, kai 0.117.0 binds a call made from
+  inside a lambda body to a stdlib function of the same name rather
+  than the module's own, which here is a zero-argument `one()`. So
+  `hs | (h) => one(h)` built and ran with no diagnostic and produced an
+  empty string for every hint. The two statusbar tests that pin the
+  separator layout caught it. The helper is now `hint_text`, passed
+  point-free (`hs | hint_text`), which keeps the module clear of the
+  collision. A direct call, a point-free reference and `list.map` all
+  resolve correctly even with a colliding name; only the lambda body is
+  misbound. Filed upstream as kaikai #1964.
+
 ### Removed
 
 - **The `spike/` directory.** It held the original raw-FFI prototype
