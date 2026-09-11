@@ -17,6 +17,6 @@ pub fn hint(key: String, action: String) : Hint = Hint { key: key, action: actio
 pub fn view(hints: [Hint]) : Ui = ui.text(join_hints(hints))
 
 fn join_hints(hs: [Hint]) : String =
-  string.join(hs | (h) => one(h), term.fg(238, "  ·  "))
+  string.join(hs | hint_text, term.fg(238, "  ·  "))
 
-fn one(h: Hint) : String = term.fg(44, h.key) ++ " " ++ term.fg(245, h.action)
+fn hint_text(h: Hint) : String = term.fg(44, h.key) ++ " " ++ term.fg(245, h.action)
