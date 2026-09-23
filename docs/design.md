@@ -5,10 +5,10 @@ terevaka is the terminal face of the lnds ecosystem — the way a
 kaikai program presents an interactive interface in a terminal,
 the same way `manutara` presents one over HTTP.
 
-> **Status:** partly built. v0.2 ships Level 1 (the `Ui` value tree,
+> **Status:** partly built. terevaka ships Level 1 (the `Ui` value tree,
 > the terminal layer, eight widgets, a Model/update/view runtime) with
 > widgets as plain values threaded by the app; Levels 2 and 3 — widgets
-> as actors, capabilities as rows — are the v0.3 target.
+> as actors, capabilities as rows — are still ahead.
 >
 > The load-bearing claims were first verified against `kai 0.84.0` and
 > re-verified on **0.111.0**, which is what §*The concurrency model
@@ -375,7 +375,7 @@ state is in isolated fibers, not one `Model`.
 > before any code landed. What shipped as v0.1 is item 1 plus a
 > non-fiber runtime: the `Ui` tree, the terminal layer, eight widgets
 > as plain values, and a poll-loop `app.run`. Items 3–6 describe the
-> v0.3 target, and item 2's diffing handler became a simpler
+> fiber target, and item 2's diffing handler became a simpler
 > frame-comparison repaint. Kept here as the direction, not as a
 > claim about the current release — see the README for what exists.
 

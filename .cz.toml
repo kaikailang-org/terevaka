@@ -6,7 +6,15 @@ version_files = ["kai.toml:^version"]
 bump_message = "release: v$new_version"
 major_version_zero = true
 
-# The CHANGELOG is hand-curated (Keep a Changelog prose, not
-# commit-subject bullets), so cz does not touch it on bump: promote
-# the [Unreleased] section manually before running `cz bump`.
-update_changelog_on_bump = false
+# cz owns the CHANGELOG: `cz bump` regenerates it, so there is no
+# [Unreleased] section to promote by hand any more. What a release
+# says is therefore exactly what the commit subjects say, which is
+# the reason to keep writing them as the release note they become.
+#
+# It appends incrementally, leaving older entries alone — but only
+# because the version headings are in the format it parses back,
+# `## vX.Y.Z (YYYY-MM-DD)`. In Keep a Changelog form (`## [X.Y.Z] -
+# date`) it does not recognise them, regenerates the whole file from
+# git, and the hand-written prose of every past release goes with it.
+# Do not reformat the headings.
+update_changelog_on_bump = true
