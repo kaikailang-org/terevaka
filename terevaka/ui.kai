@@ -154,10 +154,8 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
   }
 
 # ---- helpers ----
-#[doc("`s` concatenated `n` times; empty when `n <= 0`.")]
-pub fn repeat(s: String, n: Int) : String = if n <= 0 { "" } else { s ++ repeat(s, n - 1) }
 #[doc("A run of `n` spaces.")]
-pub fn spaces(n: Int) : String = repeat(" ", n)
+pub fn spaces(n: Int) : String = string.repeat(" ", n)
 
 #[doc("""
 Pad `s` on the right to `width` display columns.
@@ -268,7 +266,7 @@ fn pad_heights(blocks: [[String]], h: Int) : [[String]] =
   blocks | (b) => extend_lines(b, max_width(b), h - list.length(b))
 
 fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
-  if extra <= 0 { b } else { b ++ [spaces(w)] ++ extend_lines([], w, extra - 1) }
+  if extra <= 0 { b } else { b ++ list.repeat(spaces(w), extra) }
 
 # glue N blocks (all same height) line by line, with a 1-space gutter
 fn glue_blocks(blocks: [[String]], gutter: String) : [String] =
@@ -294,14 +292,14 @@ fn zip_lines(a: [String], b: [String], gutter: String) : [String] =
 # the body's natural height.
 fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = {
   let top = if t == "" {
-    term.fg(col, "╭" ++ repeat("─", w) ++ "╮")
+    term.fg(col, "╭" ++ string.repeat("─", w) ++ "╮")
   } else {
     let tv = visible_len(t)
-    term.fg(col, "╭─ ") ++ term.bold(t) ++ term.fg(col, " " ++ repeat("─", w - tv - 3) ++ "╮")
+    term.fg(col, "╭─ ") ++ term.bold(t) ++ term.fg(col, " " ++ string.repeat("─", w - tv - 3) ++ "╮")
   }
-  let bot = term.fg(col, "╰" ++ repeat("─", w) ++ "╯")
+  let bot = term.fg(col, "╰" ++ string.repeat("─", w) ++ "╯")
   let sized = if h <= 0 { body } else { fit_height(body, h) }
-  [top] ++ box_body(col, sized, w) ++ [bot]
+  [top, ...box_body(col, sized, w), bot]
 }
 
 # Fit a block of lines to exactly `h` lines: truncate from the bottom
@@ -310,21 +308,9 @@ fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = 
 # adds the colored borders, so an empty body line becomes a properly
 # bordered blank row without us duplicating the width/color work here.
 fn fit_height(lines: [String], h: Int) : [String] = match list.length(lines) {
-  n if n == h -> lines
-  n if n > h  -> take_lines(lines, h)
-  n           -> lines ++ blank_lines(h - n)
+  n if n > h -> list.take(lines, h)
+  n          -> lines ++ list.repeat("", h - n)
 }
-
-fn take_lines(lines: [String], n: Int) : [String] =
-  if n <= 0 { [] } else {
-    match lines {
-      []           -> []
-      [l, ...rest] -> [l, ...take_lines(rest, n - 1)]
-    }
-  }
-
-fn blank_lines(n: Int) : [String] =
-  if n <= 0 { [] } else { ["", ...blank_lines(n - 1)] }
 
 # A content row spans EXACTLY the same width as the top/bottom border.
 # The border is `╭` + w dashes + `╮` = w+2 columns. The body must match:

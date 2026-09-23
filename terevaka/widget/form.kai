@@ -7,6 +7,7 @@
 
 import terevaka.ui
 import terevaka.term
+import terevaka.nav
 
 # ============================================================
 # Checkbox — a single on/off toggle. Space flips it.
@@ -20,7 +21,7 @@ pub fn checkbox(label: String, checked: Bool) : Checkbox =
 
 #[doc("Flip the checkbox.")]
 pub fn toggle(c: Checkbox) : Checkbox =
-  Checkbox { label: c.label, checked: not c.checked }
+  Checkbox { ...c, checked: not c.checked }
 
 #[doc("Space toggles; every other key leaves it unchanged.")]
 pub fn checkbox_update(c: Checkbox, k: term.Key) : Checkbox =
@@ -71,9 +72,9 @@ pub fn radio_update(r: Radio, k: term.Key) : Radio =
   }
 
 fn move_cursor(r: Radio, d: Int) : Radio =
-  Radio { options: r.options, cursor: wrap(r.cursor + d, list.length(r.options)), chosen: r.chosen }
+  Radio { ...r, cursor: nav.wrap(r.cursor + d, list.length(r.options)) }
 fn choose(r: Radio) : Radio =
-  Radio { options: r.options, cursor: r.cursor, chosen: r.cursor }
+  Radio { ...r, chosen: r.cursor }
 
 #[doc("Render one `(o) label` row per option, the chosen one filled.")]
 pub fn radio_view(r: Radio, focused: Bool) : Ui =
@@ -118,10 +119,3 @@ pub fn button_view(b: Button, focused: Bool) : Ui =
   } else {
     ui.text(term.fg(245, "[ " ++ b.label ++ " ]"))
   }
-
-# ---- shared local helpers ----
-fn wrap(i: Int, n: Int) : Int = match i {
-  x if x < 0  -> n - 1
-  x if x >= n -> 0
-  x           -> x
-}

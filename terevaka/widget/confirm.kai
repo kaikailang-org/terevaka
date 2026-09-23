@@ -30,8 +30,8 @@ it, y/n answer directly, Esc is No.
 """)]
 pub fn update(c: Confirm, k: term.Key) : Answer =
   match k {
-    Left         -> Pending(Confirm { question: c.question, on_yes: true })
-    Right        -> Pending(Confirm { question: c.question, on_yes: false })
+    Left         -> Pending(Confirm { ...c, on_yes: true })
+    Right        -> Pending(Confirm { ...c, on_yes: false })
     Printable(ch) -> nav_char(c, ch)
     Enter        -> if c.on_yes { Yes } else { No }
     Esc          -> No
@@ -39,8 +39,8 @@ pub fn update(c: Confirm, k: term.Key) : Answer =
   }
 
 fn nav_char(c: Confirm, ch: Char) : Answer = match ch {
-  'h' -> Pending(Confirm { question: c.question, on_yes: true })
-  'l' -> Pending(Confirm { question: c.question, on_yes: false })
+  'h' -> Pending(Confirm { ...c, on_yes: true })
+  'l' -> Pending(Confirm { ...c, on_yes: false })
   'y' -> Yes
   'n' -> No
   _   -> Pending(c)

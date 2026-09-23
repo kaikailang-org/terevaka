@@ -6,6 +6,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Fixed
+
+- **A cursor step on an empty list landed on -1.** `wrap`, the index
+  arithmetic under every list-shaped widget, lived in four copies and
+  only `board`'s guarded the empty case. So `Up` on an empty menu,
+  listbox or radio group computed `n - 1` = -1 — an index no lookup can
+  satisfy and no later move recovers from, since every subsequent step
+  is derived from it. It showed up as a widget that went dead after one
+  keystroke rather than as an error, and it shipped with the widgets in
+  v0.1. The four copies are now one guarded copy in `terevaka/nav.kai`.
+
+  The old menu test asserted only that an empty menu has no label,
+  which -1 satisfies. The empty-list case is now pinned directly, in
+  `nav_test` and in the menu, listbox and form suites.
+
+- **`overlay` ran twice on every frame.** `loop_overlay_framed` called
+  it once to build the frame signature and again to decide what to
+  paint. `overlay` carries the caller's effect row — `(m) -> Option[Ui]
+  / e` — so whatever it performs happened twice per frame, five times a
+  second at the default 200 ms tick. It is now performed once and the
+  result reused for both.
+
+### Changed
+
+- **BREAKING: `ui.repeat` is gone.** It duplicated `string.repeat`,
+  which predates terevaka, and did it worse: `s ++ repeat(s, n - 1)` is
+  quadratic and not tail-recursive, where the stdlib assembles the
+  pieces and concatenates once. A root-module `pub fn` shadowing a
+  same-name core function is also the shape that emptied the status bar
+  in 0.1.5. **To migrate: call `string.repeat(s, n)`** — same
+  signature, same empty result for `n <= 0`. `ui.spaces` is unchanged
+  and now delegates to it.
+
+- **The widgets share one cursor rule.** New module `terevaka.nav`
+  holds `wrap`; menu, listbox, form and board import it instead of each
+  carrying a private copy.
+
+- **Record updates use the spread form.** `T { ...src, field: v }`
+  replaces the field-by-field rebuilds through the widgets and all
+  three examples, where the kanban re-typed a nine-field model in six
+  helpers. The rebuilds were not only noise: several demo and kanban
+  helpers pinned `done: false` or a fixed `mode` instead of carrying
+  the model's own value, so a field could be reset by a helper that had
+  no business touching it.
+
+- **Five hand-rolled helpers give way to the stdlib**, continuing the
+  pass in `ab145f9`: `app.frames_eq` (`==` on `[String]` is already
+  structural), `ui.take_lines` (`list.take`), `ui.blank_lines` and
+  `ui.extend_lines` (`list.repeat`), and `board.nth_card` (`list.nth`).
+  Net 164 lines deleted against 104 added.
+
+- **The stated compiler version is now 0.121.0**, verified by
+  rebuilding the three examples from clean and running `make test`: 56
+  tests across 13 files, plus `test-eof`. No source change was needed
+  to move from 0.117.0 — the breaking changes in between (`string.bytes`
+  as `[Byte]` in 0.118.0, codepoint-indexed `string.slice` in 0.119.0)
+  do not reach terevaka, though the comment in `input.drop_last` that
+  justified avoiding `slice` is now out of date.
+
 ## [0.1.5] - 2026-09-11
 
 ### Added

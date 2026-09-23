@@ -12,6 +12,7 @@
 
 import terevaka.ui
 import terevaka.term
+import terevaka.nav
 
 #[doc("A list of item labels plus the cursor position.")]
 pub type Menu = { items: [String], cursor: Int }
@@ -31,17 +32,17 @@ pub fn selected(m: Menu) : Int = m.cursor
 #[doc("Move the cursor with Up/Down or k/j, wrapping at both ends. Other keys are no-ops.")]
 pub fn update(m: Menu, k: term.Key) : Menu =
   match k {
-    Up           -> with_cursor(m, wrap(m.cursor - 1, count(m)))
-    Down         -> with_cursor(m, wrap(m.cursor + 1, count(m)))
+    Up           -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
+    Down         -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
     Printable(c) -> match c {
-                      'k' -> with_cursor(m, wrap(m.cursor - 1, count(m)))
-                      'j' -> with_cursor(m, wrap(m.cursor + 1, count(m)))
+                      'k' -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
+                      'j' -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
                       _   -> m
                     }
     _            -> m
   }
 
-fn with_cursor(m: Menu, c: Int) : Menu = Menu { items: m.items, cursor: c }
+fn with_cursor(m: Menu, c: Int) : Menu = Menu { ...m, cursor: c }
 
 #[doc("Render one row per item, the selected one carrying the highlight bar.")]
 pub fn view(m: Menu) : Ui = {
@@ -59,12 +60,3 @@ fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
 # widest item, for a uniform highlight bar (0 when there are none)
 fn item_width(items: [String]) : Int =
   list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
-
-# ---- tiny local helpers ----
-# Index wrap-around. No stdlib equivalent: this is cursor movement,
-# not modulo — a negative index lands on the last element.
-fn wrap(i: Int, n: Int) : Int = match i {
-  x if x < 0  -> n - 1
-  x if x >= n -> 0
-  x           -> x
-}

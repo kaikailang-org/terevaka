@@ -81,20 +81,17 @@ fn next_focus(m: Model) : Model =
   })
 
 fn open_confirm(m: Model) : Model =
-  Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
-          asking: true, confirm: confirm.make("Save changes?"), status: m.status, done: false }
+  Model { ...m, asking: true, confirm: confirm.make("Save changes?") }
 
 fn update_confirm(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match confirm.update(m.confirm, k) {
-    Pending(c) -> app.keep(Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme,
-                                   save: m.save, asking: true, confirm: c, status: m.status, done: false })
+    Pending(c) -> app.keep(Model { ...m, asking: true, confirm: c })
     Yes        -> app.keep(close_confirm(m, "saved! theme=#{form.radio_chosen_label(m.theme)}"))
     No         -> app.keep(close_confirm(m, "cancelled"))
   }
 
 fn close_confirm(m: Model, status: String) : Model =
-  Model { focus: m.focus, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
-          asking: false, confirm: m.confirm, status: status, done: false }
+  Model { ...m, asking: false, status: status }
 
 # ---- view: a split-pane + status bar ----
 fn view(m: Model) : Ui = {
@@ -138,18 +135,10 @@ fn focus_eq(a: Focus, b: Focus) : Bool =
 fn focus_tag(m: Model, f: Focus, base: String) : String =
   if focus_is(m, f) { "▸ " ++ base } else { base }
 
-fn set_focus(m: Model, f: Focus) : Model =
-  Model { focus: f, files: m.files, notify: m.notify, theme: m.theme, save: m.save,
-          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
-fn set_files(m: Model, l: listbox.List) : Model =
-  Model { focus: m.focus, files: l, notify: m.notify, theme: m.theme, save: m.save,
-          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
-fn set_notify(m: Model, c: form.Checkbox) : Model =
-  Model { focus: m.focus, files: m.files, notify: c, theme: m.theme, save: m.save,
-          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
-fn set_theme(m: Model, r: form.Radio) : Model =
-  Model { focus: m.focus, files: m.files, notify: m.notify, theme: r, save: m.save,
-          asking: m.asking, confirm: m.confirm, status: m.status, done: m.done }
+fn set_focus(m: Model, f: Focus) : Model          = Model { ...m, focus: f }
+fn set_files(m: Model, l: listbox.List) : Model   = Model { ...m, files: l }
+fn set_notify(m: Model, c: form.Checkbox) : Model = Model { ...m, notify: c }
+fn set_theme(m: Model, r: form.Radio) : Model     = Model { ...m, theme: r }
 
 fn main() : Int / Ffi = {
   app.run_overlay(initial(), update, view, overlay, 200)

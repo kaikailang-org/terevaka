@@ -26,6 +26,7 @@
 
 import terevaka.ui
 import terevaka.term
+import terevaka.nav
 
 #[doc("""
 A card's type, which drives its one-char marker.
@@ -77,7 +78,7 @@ pub fn active_column(b: Board) : Int = b.active
 #[doc("The card under the cursor in the active column, or `None` if it is empty.")]
 pub fn selected_card(b: Board) : Option[Card] = {
   let col = nth_col(b.columns, b.active)
-  nth_card(col.cards, col.cursor)
+  list.nth(col.cards, col.cursor)
 }
 
 #[doc("""
@@ -106,13 +107,13 @@ fn nav_char(b: Board, c: Char) : Board = match c {
 }
 
 fn switch_col(b: Board, d: Int) : Board =
-  Board { columns: b.columns, active: wrap(b.active + d, list.length(b.columns)), width: b.width, height: b.height }
+  Board { ...b, active: nav.wrap(b.active + d, list.length(b.columns)) }
 
 fn move_cursor(b: Board, d: Int) : Board = {
   let col = nth_col(b.columns, b.active)
   let n = list.length(col.cards)
-  let cur = if n == 0 { 0 } else { wrap(col.cursor + d, n) }
-  set_col(b, b.active, Column { title: col.title, color: col.color, cards: col.cards, cursor: cur })
+  let cur = if n == 0 { 0 } else { nav.wrap(col.cursor + d, n) }
+  set_col(b, b.active, Column { ...col, cursor: cur })
 }
 
 # ---- MOVING a card between columns (the kanban operation) ----
@@ -125,20 +126,20 @@ pub fn move_card_left(b: Board) : Board = move_card(b, -1)
 
 fn move_card(b: Board, d: Int) : Board = {
   let src_i = b.active
-  let dst_i = wrap(b.active + d, list.length(b.columns))
+  let dst_i = nav.wrap(b.active + d, list.length(b.columns))
   if src_i == dst_i { b } else {
     let src = nth_col(b.columns, src_i)
-    match nth_card(src.cards, src.cursor) {
+    match list.nth(src.cards, src.cursor) {
       None    -> b
       Some(c) -> {
-        let src2 = Column { title: src.title, color: src.color,
+        let src2 = Column { ...src,
                             cards: remove_at(src.cards, src.cursor),
                             cursor: clamp_cursor(src.cursor, list.length(src.cards) - 1) }
         let dst = nth_col(b.columns, dst_i)
-        let dst2 = Column { title: dst.title, color: dst.color, cards: [c, ...dst.cards], cursor: 0 }
+        let dst2 = Column { ...dst, cards: [c, ...dst.cards], cursor: 0 }
         let b1 = set_col(b, src_i, src2)
         let b2 = set_col(b1, dst_i, dst2)
-        Board { columns: b2.columns, active: dst_i, width: b2.width, height: b2.height }   # follow the card
+        Board { ...b2, active: dst_i }   # follow the card
       }
     }
   }
@@ -156,7 +157,7 @@ fn reorder(b: Board, d: Int) : Board = {
   let j = i + d
   if j < 0 or j >= list.length(col.cards) { b } else {
     let swapped = swap_at(col.cards, i, j)
-    set_col(b, b.active, Column { title: col.title, color: col.color, cards: swapped, cursor: j })
+    set_col(b, b.active, Column { ...col, cards: swapped, cursor: j })
   }
 }
 
@@ -170,7 +171,7 @@ the kind defaults to `Task`.
 pub fn add_card(b: Board, ref: String, title: String) : Board = {
   let col = nth_col(b.columns, b.active)
   let cards = col.cards ++ [Card { ref: ref, kind: Task, title: title }]
-  set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards, cursor: list.length(col.cards) })
+  set_col(b, b.active, Column { ...col, cards: cards, cursor: list.length(col.cards) })
 }
 
 #[doc("Drop the selected card, clamping the cursor. A no-op on an empty column.")]
@@ -178,7 +179,7 @@ pub fn remove_selected(b: Board) : Board = {
   let col = nth_col(b.columns, b.active)
   if list.length(col.cards) == 0 { b } else {
     let cards = remove_at(col.cards, col.cursor)
-    set_col(b, b.active, Column { title: col.title, color: col.color, cards: cards,
+    set_col(b, b.active, Column { ...col, cards: cards,
                                   cursor: clamp_cursor(col.cursor, list.length(cards) - 1) })
   }
 }
@@ -260,23 +261,10 @@ fn nth_col(cols: [Column], i: Int) : Column =
   }
 
 fn set_col(b: Board, i: Int, col: Column) : Board =
-  Board { columns: replace_at(b.columns, i, col), active: b.active, width: b.width, height: b.height }
+  Board { ...b, columns: replace_at(b.columns, i, col) }
 
 fn replace_at(cols: [Column], i: Int, v: Column) : [Column] =
   match cols {
     []           -> []
     [c, ...rest] -> if i == 0 { [v, ...rest] } else { [c, ...replace_at(rest, i - 1, v)] }
   }
-
-fn nth_card(cards: [Card], i: Int) : Option[Card] =
-  match cards {
-    []           -> None
-    [c, ...rest] -> if i == 0 { Some(c) } else { nth_card(rest, i - 1) }
-  }
-
-fn wrap(i: Int, n: Int) : Int = match i {
-  _ if n <= 0 -> 0
-  x if x < 0  -> n - 1
-  x if x >= n -> 0
-  x           -> x
-}
