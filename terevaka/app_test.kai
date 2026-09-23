@@ -5,7 +5,8 @@
 # `run_overlay` take over the terminal (raw mode, repaint, teardown),
 # so exercising them needs a real process rather than a test block.
 # What covers the loop instead:
-#   - `test-eof` in the Makefile, for the end-of-input exit path;
+#   - `test-notty` in the Makefile, for the refusal when there is no
+#     terminal to drive;
 #   - the examples, which are built on every `make`.
 
 import terevaka.app

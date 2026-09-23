@@ -140,7 +140,7 @@ fn set_files(m: Model, l: listbox.List) : Model   = Model { ...m, files: l }
 fn set_notify(m: Model, c: form.Checkbox) : Model = Model { ...m, notify: c }
 fn set_theme(m: Model, r: form.Radio) : Model     = Model { ...m, theme: r }
 
-fn main() : Int / Ffi = {
-  app.run_overlay(initial(), update, view, overlay, 200)
-  0
+fn main() : Int / Ffi = match app.run_overlay(initial(), update, view, overlay, 200) {
+  Ok(_)    -> 0
+  Err(msg) -> { term.write(msg ++ "\n"); 1 }   # no terminal: see the demo
 }

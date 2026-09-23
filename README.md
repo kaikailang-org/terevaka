@@ -67,10 +67,11 @@ fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
 fn view(m: Model) : Ui / Clock =
   ui.box(48, "menu", menu.view(m.menu))
 
-fn main() : Int / Ffi + Clock = {
-  app.run(initial(), update, view, 200)   # 200ms idle tick
-  0
-}
+fn main() : Int / Ffi + Clock =
+  match app.run(initial(), update, view, 200) {   # 200ms idle tick
+    Ok(_)    -> 0
+    Err(msg) -> { term.write(msg ++ "\n"); 1 }   # no terminal to drive
+  }
 ```
 
 ## The pieces

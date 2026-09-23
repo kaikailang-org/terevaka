@@ -2,11 +2,11 @@
 # the reply rule `probe` reads by.
 #
 # The Ffi half is not covered here. raw_enable/raw_disable, rows/cols,
-# poll_key and `probe` itself all need a real terminal — poll_key's
-# end-of-input path is covered instead by the `test-eof` target in the
-# Makefile, which runs a built app with its stdin closed. `probe` is
-# split so the part that decides when a reply is complete is pure, and
-# that part is what these cover.
+# poll_key and `probe` itself all need a real terminal — the path taken
+# when there is none is covered instead by the `test-notty` target in
+# the Makefile, which runs a built app with its stdin redirected.
+# `probe` is split so the part that decides when a reply is complete is
+# pure, and that part is what these cover.
 
 import terevaka.term
 import terevaka.ui

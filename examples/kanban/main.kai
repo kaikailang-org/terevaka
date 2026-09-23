@@ -188,6 +188,8 @@ fn bump_id(m: Model) : Model                   = Model { ...m, next_id: m.next_i
 fn main() : Int / Ffi = {
   let cols = term.cols()
   let rows = term.rows()
-  app.run_overlay(initial(cols, rows), update, view, overlay, 200)
-  0
+  match app.run_overlay(initial(cols, rows), update, view, overlay, 200) {
+    Ok(_)    -> 0
+    Err(msg) -> { term.write(msg ++ "\n"); 1 }   # no terminal: see the demo
+  }
 }

@@ -107,7 +107,9 @@ fn with_menu(m: Model, mn: menu.Menu) : Model = Model { ...m, menu: mn }
 fn with_status(m: Model, s: String) : Model   = Model { ...m, status: s }
 fn greet(n: String) : String = if n == "" { "stranger" } else { n }
 
-fn main() : Int / Ffi + Clock = {
-  app.run_overlay(initial(), update, view, overlay, 200)
-  0
+# An app that cannot have a terminal says why and exits non-zero,
+# rather than reporting success for a UI nobody ever saw.
+fn main() : Int / Ffi + Clock = match app.run_overlay(initial(), update, view, overlay, 200) {
+  Ok(_)    -> 0
+  Err(msg) -> { term.write(msg ++ "\n"); 1 }
 }

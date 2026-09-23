@@ -40,26 +40,41 @@ The runtime owns raw mode, the input loop, the flicker-free repaint
 and teardown. Row-polymorphic over `e`: view and update carry whatever
 effects they actually use, so a static app needs no Clock and a live
 one simply declares it.
+
+`Err` means there is no terminal to drive: stdin is a pipe, a redirect
+or a CI job, so raw mode cannot come on and no keystroke can ever
+arrive. Nothing is painted in that case — the check happens before the
+first write, so a program run with its input redirected reports the
+reason instead of wiping the screen and exiting. Hand the message to
+the user and exit non-zero, or call `Stdin.is_tty()` beforehand to
+offer a non-interactive path instead.
 """)]
 pub fn run[m, e](
   initial: m,
   update:  (m, term.Key) -> Step[m] / Ffi + e,
   view:    (m) -> Ui / e,
   tick_ms: Int
-) : Unit / Ffi + e = {
-  term.raw_enable()
-  term.write(term.hide_cursor())
-  # Clear the screen ONCE on entry, so whatever was in the terminal
-  # before (the shell prompt, prior output) does not show through the
-  # margins. After this, the loop repaints in place (home + clear_eol,
-  # never a full ESC[2J) so there is no per-frame flicker — the initial
-  # clear gives a clean canvas, the in-place repaint keeps it flicker-free.
-  term.write(term.clear())
-  loop(initial, update, view, tick_ms)
-  term.write(term.show_cursor())
-  term.write(term.clear())
-  term.raw_disable()
-}
+) : Result[Unit, String] / Ffi + e =
+  if not term.raw_enable() { Err(no_terminal()) }
+  else {
+    term.write(term.hide_cursor())
+    # Clear the screen ONCE on entry, so whatever was in the terminal
+    # before (the shell prompt, prior output) does not show through the
+    # margins. After this, the loop repaints in place (home + clear_eol,
+    # never a full ESC[2J) so there is no per-frame flicker — the initial
+    # clear gives a clean canvas, the in-place repaint keeps it flicker-free.
+    term.write(term.clear())
+    loop(initial, update, view, tick_ms)
+    term.write(term.show_cursor())
+    term.write(term.clear())
+    term.raw_disable()
+    Ok(())
+  }
+
+# What `run` and `run_overlay` report when raw mode cannot come on.
+# One message, so both entry points say the same thing.
+fn no_terminal() : String =
+  "terevaka: stdin is not a terminal, so raw mode is unavailable and no key can arrive. Check Stdin.is_tty() before run to offer a non-interactive path."
 
 # The loop threads the PREVIOUS frame (the painted line list) so it can
 # skip the repaint when nothing changed. The input poll returns a
@@ -151,6 +166,9 @@ on top of the base view, or `None` for no modal.
 Keys still go to `update` while a modal is up — the app decides what
 the overlay consumes, so a popup can be dismissed or answered without
 a second event loop.
+
+`Err` carries the same missing-terminal case `run` reports, and
+likewise paints nothing when it happens.
 """)]
 pub fn run_overlay[m, e](
   initial: m,
@@ -158,15 +176,17 @@ pub fn run_overlay[m, e](
   view:    (m) -> Ui / e,
   overlay: (m) -> Option[Ui] / e,
   tick_ms: Int
-) : Unit / Ffi + e = {
-  term.raw_enable()
-  term.write(term.hide_cursor())
-  term.write(term.clear())   # clean canvas on entry (see `run`)
-  loop_overlay(initial, update, view, overlay, tick_ms)
-  term.write(term.show_cursor())
-  term.write(term.clear())
-  term.raw_disable()
-}
+) : Result[Unit, String] / Ffi + e =
+  if not term.raw_enable() { Err(no_terminal()) }
+  else {
+    term.write(term.hide_cursor())
+    term.write(term.clear())   # clean canvas on entry (see `run`)
+    loop_overlay(initial, update, view, overlay, tick_ms)
+    term.write(term.show_cursor())
+    term.write(term.clear())
+    term.raw_disable()
+    Ok(())
+  }
 
 fn loop_overlay[m, e](
   model:   m,
