@@ -1,0 +1,29 @@
+# Does `term.probe` bring back what the terminal answered, and come
+# back empty when nothing answers? Both need a real tty, so this runs
+# under the pty driver beside it rather than as a `kai test` case.
+#
+# It asks the kitty graphics question. A terminal that speaks the
+# protocol replies `ESC _ G i=31;OK ESC \`; one that does not says
+# nothing at all, which is the case `probe` has to survive without
+# hanging and without leaving raw mode on.
+import terevaka.term
+
+fn main() : Int / Ffi = {
+  let st  = "#{term.esc()}\\"
+  let req = "#{term.esc()}_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA#{st}"
+  match term.probe(req, [st], 1500) {
+    None       -> term.write("probe: no answer\n")
+    Some(body) ->
+      # the body carries ESC bytes, so report its shape rather than
+      # echoing it back into the terminal
+      if string.index_of(body, "OK") != None {
+        term.write("probe: answered ok, #{string.length(body)} bytes\n")
+      } else {
+        term.write("probe: answered, #{string.length(body)} bytes, no OK\n")
+      }
+  }
+  # If raw mode were still on here, the shell that follows would be
+  # unusable; the driver checks this line arrives with echo restored.
+  term.write("probe: terminal restored\n")
+  0
+}

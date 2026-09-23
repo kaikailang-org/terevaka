@@ -9,7 +9,7 @@ build/
 **/.kai-cache/
 
 # Package lock (path/git deps resolved per-checkout; terevaka has none
-# in v0.1, but keep this for when ahu arrives in v0.2).
+# in v0.1, but keep this for when ahu arrives in v0.3).
 kai.lock
 
 # Editor / OS noise.
