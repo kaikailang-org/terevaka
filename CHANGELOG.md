@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## v0.4.0 (2026-09-23)
+
+### BREAKING CHANGE
+
+- `app.run` and `app.run_overlay` return `Result[Unit,
+String]` rather than `Unit`, and `term.raw_enable` returns `Bool`
+rather than `Unit`. A caller that ignored the outcome now matches on
+it: `match app.run(...) { Ok(_) -> 0  Err(msg) -> { term.write(msg ++
+"\n"); 1 } }`.
+
+### Fix
+
+- **app**: report a missing terminal instead of painting a UI nobody can use
+
 ## v0.3.0 (2026-09-23)
 
 ### Feat
