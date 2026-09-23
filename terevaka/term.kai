@@ -152,3 +152,100 @@ pub fn dim(s: String) : String = "#{esc()}[2m#{s}#{esc()}[0m"
 
 #[doc("Swap foreground and background for `s`.")]
 pub fn invert(s: String) : String = "#{esc()}[7m#{s}#{esc()}[0m"
+
+# ---- Asking the terminal a question ----
+#[doc("""
+The body of a terminated reply: `raw` without the first of
+`terminators` it ends with, or `None` when it ends with none of them.
+
+Pure, so a caller assembling bytes by other means can share the same
+rule `probe` reads by. Empty terminators are skipped: one would match
+every string and swallow the whole reply.
+""")]
+pub fn reply_body(raw: String, terminators: [String]) : Option[String] =
+  match terminators {
+    []           -> None
+    [t, ...rest] ->
+      if t == "" { reply_body(raw, rest) }
+      else {
+        match string.drop_suffix(raw, t) {
+          Some(body) -> Some(body)
+          None       -> reply_body(raw, rest)
+        }
+      }
+  }
+
+#[doc("""
+Ask the terminal something and read what it answers back.
+
+Writes `request`, then reads until the reply ends with one of
+`terminators` and returns the body without it. `None` means the
+terminal did not answer — which is the answer a capability probe is
+after: an emulator that does not speak the protocol stays silent.
+
+Call this BEFORE `app.run`, never during it. The transaction owns raw
+mode for its own duration and restores the terminal on the way out, so
+the runtime then does its own clean enable. Two reasons it cannot share
+the loop: `poll_key` routes the ESC every reply opens to the arrow
+decoder, which eats it, and enabling raw mode twice makes the raw state
+the one `raw_disable` restores to.
+
+`first_ms` budgets the terminal's round trip. The rest of the reply
+arrives in the same burst and is read on a short fixed timeout, so no
+clock is needed to bound the whole exchange. A reply is read whole or
+not at all — anything past 256 bytes is treated as noise rather than an
+answer, and a partial one is discarded by the flush on the way out
+rather than leaking into the app as phantom keystrokes.
+
+```kai
+# does this terminal speak the kitty graphics protocol?
+let esc = term.esc()
+let supported = term.probe(
+  "#{esc}_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA#{esc}\\\\",
+  ["#{esc}\\\\"],
+  120
+) != None
+```
+""")]
+pub fn probe(request: String, terminators: [String], first_ms: Int) : Option[String] / Ffi =
+  # A failed enable means stdin is not a terminal, so nothing can
+  # answer; the terminal is untouched and there is nothing to restore.
+  if kai_tvk_raw_enable() != 0 { None }
+  else {
+    let _ = kai_tvk_write(request)
+    let answer = read_reply(terminators, first_ms, [])
+    let _ = kai_tvk_raw_disable()
+    answer
+  }
+
+# Read one byte at a time, testing the reply after each. The first read
+# waits `ms` for the round trip; the rest arrive together, so they wait
+# the same short beat `escape_seq` gives a pending arrow sequence.
+fn read_reply(terminators: [String], ms: Int, acc_rev: [Byte]) : Option[String] / Ffi =
+  if list.length(acc_rev) >= reply_cap() { None }
+  else {
+    match kai_tvk_poll_key(ms) {
+      # timeout, end of input or a read error: no answer is coming
+      b if b < 0 -> None
+      b -> match int_to_byte(b) {
+        Err(_)   -> None
+        Ok(byte) -> {
+          let next = [byte, ...acc_rev]
+          let raw  = string.from_bytes(list.reverse(next))
+          match reply_body(raw, terminators) {
+            Some(body) -> Some(body)
+            None       -> read_reply(terminators, follow_ms(), next)
+          }
+        }
+      }
+    }
+  }
+
+# How long to wait for each byte after the first. The reply arrives as
+# one burst, so this bounds the tail without a clock.
+fn follow_ms() : Int = 20
+
+# Past this many bytes the stream is noise, not a reply to the question
+# we asked. Bounds the read when a terminator never arrives but bytes
+# keep coming.
+fn reply_cap() : Int = 256

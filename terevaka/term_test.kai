@@ -1,9 +1,12 @@
-# Tests for the pure half of the terminal layer: the ANSI builders.
+# Tests for the pure half of the terminal layer: the ANSI builders and
+# the reply rule `probe` reads by.
 #
-# The Ffi half is not covered here. raw_enable/raw_disable, rows/cols
-# and poll_key all need a real terminal — poll_key's end-of-input path
-# is covered instead by the `test-eof` target in the Makefile, which
-# runs a built app with its stdin closed.
+# The Ffi half is not covered here. raw_enable/raw_disable, rows/cols,
+# poll_key and `probe` itself all need a real terminal — poll_key's
+# end-of-input path is covered instead by the `test-eof` target in the
+# Makefile, which runs a built app with its stdin closed. `probe` is
+# split so the part that decides when a reply is complete is pure, and
+# that part is what these cover.
 
 import terevaka.term
 import terevaka.ui
@@ -35,4 +38,46 @@ test "term — esc is one character, the sequences build on it" {
   assert string.starts_with(term.clear_eol(), term.esc())
   assert string.starts_with(term.hide_cursor(), term.esc())
   assert string.starts_with(term.show_cursor(), term.esc())
+}
+
+# ---- reply_body: the rule `probe` stops reading on ----
+
+test "reply_body — a reply ending in a terminator gives up its body" {
+  let st = "#{term.esc()}\\"
+  assert term.reply_body("#{term.esc()}_Gi=31;OK#{st}", [st]) == Some("#{term.esc()}_Gi=31;OK")
+  assert term.reply_body("body#{st}", [st]) == Some("body")
+}
+
+test "reply_body — an unterminated reply is not a reply yet" {
+  let st = "#{term.esc()}\\"
+  assert term.reply_body("#{term.esc()}_Gi=31;OK", [st]) == None
+  assert term.reply_body("", [st]) == None
+  # a prefix of the terminator is not the terminator
+  assert term.reply_body("body#{term.esc()}", [st]) == None
+}
+
+test "reply_body — the first matching terminator wins" {
+  # OSC 11 closes with ST on some terminals and BEL on others, which is
+  # why the caller passes a list rather than one string
+  let st  = "#{term.esc()}\\"
+  let bel = "#{int_to_char(7)}"
+  assert term.reply_body("rgb:1111/2222/3333#{bel}", [st, bel]) == Some("rgb:1111/2222/3333")
+  assert term.reply_body("rgb:1111/2222/3333#{st}", [st, bel]) == Some("rgb:1111/2222/3333")
+  assert term.reply_body("rgb:1111/2222/3333", [st, bel]) == None
+}
+
+test "reply_body — no terminator can ever match" {
+  # an empty terminator would match every string and swallow the reply,
+  # so it is skipped rather than honoured
+  assert term.reply_body("anything", []) == None
+  assert term.reply_body("anything", [""]) == None
+  assert term.reply_body("anything", ["", "thing"]) == Some("any")
+}
+
+test "reply_body — the terminator is stripped, not just detected" {
+  let st   = "#{term.esc()}\\"
+  let body = term.reply_body("payload#{st}", [st]).unwrap_or("")
+  assert body == "payload"
+  # no fragment of the terminator survives in the body
+  assert string.index_of(body, term.esc()) == None
 }
