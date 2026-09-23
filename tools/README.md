@@ -1,6 +1,6 @@
 # tools/
 
-## `raw_park_probe` — the v0.3 gate
+## `raw_park_probe` — the fiber gate
 
 Answers one question: **does a fiber reading the terminal park itself,
 or park the scheduler?**
@@ -8,7 +8,7 @@ or park the scheduler?**
 The whole reason terevaka threads widgets as plain values instead of
 fibers is that a blocking raw read used to freeze every other fiber, so
 the input pump could not be a fiber. The design (`docs/design.md`) calls
-this the #1 technical blocker for v0.3.
+this the #1 technical blocker for it.
 
 The probe runs a reader fiber (`Stdin.read_bytes(1)`) alongside a
 ticker fiber, with `term.raw_enable()` in effect, under a real pty. If
@@ -38,7 +38,7 @@ fiber, not the scheduler.
 It needs a real pty — hence the Python driver rather than a `kai test`
 case. It is not wired into `make test`: this is a probe answering an
 upstream question, not a regression guarding terevaka's own behaviour.
-Re-run it when the compiler moves, before betting v0.3 work on it.
+Re-run it when the compiler moves, before betting fiber work on it.
 
 ## `term_probe_check` — the regression behind `term.probe`
 

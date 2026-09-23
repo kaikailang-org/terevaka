@@ -5,7 +5,7 @@ edition = "hanga-roa"
 [dependencies]
 
 # terevaka v0.1 has no kaikai-package dependencies. The ahu dependency
-# (cells / restart for the fiber architecture) arrives in v0.3 once
+# (cells / restart for the fiber architecture) arrives with it, once
 # raw-mode-on-reactor unblocks the input pump.
 
 # The terminal shim travels with the package: every verb that links a
