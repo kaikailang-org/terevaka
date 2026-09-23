@@ -1,5 +1,5 @@
 # Does a fiber reading stdin park while OTHER fibers run — in raw mode,
-# byte at a time, on a real tty? That is the v0.2 gate.
+# byte at a time, on a real tty? That is the v0.3 gate.
 import terevaka.term
 import spawn
 import time

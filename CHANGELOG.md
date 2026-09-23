@@ -6,6 +6,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Added
+
+- **`term.probe` asks the terminal a question and reads its answer.**
+  Writes a request, reads until the reply ends with one of the
+  terminators it was given, and returns the body without it. `None`
+  means the terminal said nothing — which is the answer a capability
+  probe is after, since an emulator that does not speak a protocol
+  stays silent.
+
+  This is what it takes to detect terminal capabilities honestly. The
+  kitty graphics protocol is found by asking for it; `$TERM` and its
+  neighbours misreport over ssh and inside tmux. Requested by
+  `lnds/mark` for image support, with OSC 11 (the background colour)
+  as the second consumer already waiting. Closes #8.
+
+  It is a transaction, not a byte-level door: it owns raw mode for its
+  own duration and hands the terminal back untouched. **Call it before
+  `app.run`, never during it.** Two things make sharing the loop
+  impossible: `poll_key` routes the ESC that opens every reply to the
+  arrow decoder, which eats it, and enabling raw mode a second time
+  makes the raw state the one `raw_disable` later restores to, leaving
+  the shell unusable on exit.
+
+  The reply is read whole or not at all. Past 256 bytes the stream is
+  noise rather than an answer, and a partial reply is discarded by the
+  `TCSAFLUSH` on the way out instead of leaking into the app as
+  phantom keystrokes. `first_ms` budgets the terminal's round trip;
+  the rest of the burst is read on the same short beat `escape_seq`
+  already gives a pending arrow sequence, so bounding the exchange
+  needs no clock and the module stays `Ffi`-only.
+
+  On a descriptor that is not a terminal it returns `None` without
+  even writing the request — a pipe or a CI job is the ordinary way a
+  program gets run by accident, not a corner case.
+
+- **`term.reply_body`**, the pure rule `probe` stops reading on: the
+  body of a reply minus the first terminator it ends with. Split out
+  so the decision is testable without a terminal, and public so a
+  caller assembling bytes by other means reads by the same rule. Empty
+  terminators are skipped rather than honoured — one would match every
+  string and swallow the reply.
+
+- **`make test-probe`**, a regression for all three of `probe`'s
+  paths, under a pty driver that plays the terminal on the other end
+  (`tools/term_probe_check.{kai,py}`): a terminal that answers, one
+  that stays silent, and a descriptor that is no terminal at all. It
+  checks raw mode was restored each time, which shows up as the report
+  lines arriving with CRLF rather than bare LF. It needs a Python with
+  `pty` and reports a skip instead of failing the suite when there is
+  none; `PYTHON` picks the interpreter, which matters where a version
+  manager shadows `python3` with a shim that resolves to nothing.
+
+### Changed
+
+- **The fiber milestone's remaining references move to v0.3.** The
+  retarget in 0.2.0 missed `tools/README.md`, `tools/raw_park_probe.kai`
+  and `.gitignore`.
+
 ## [0.2.0] - 2026-09-23
 
 ### Fixed
