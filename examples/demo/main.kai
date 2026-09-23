@@ -55,26 +55,25 @@ fn update_browsing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
 
 fn activate(m: Model) : Model =
   match menu.selected(m.menu) {
-    0 -> Model { screen: ScrEdit, menu: m.menu, field: input.focus(m.field),
-                 status: "type · Enter save · Esc cancel", done: false }
+    0 -> Model { ...m, screen: ScrEdit, field: input.focus(m.field),
+                 status: "type · Enter save · Esc cancel" }
     1 -> with_status(m, "Hello, #{greet(input.value(m.field))}!")
-    2 -> Model { screen: ScrPopup, menu: m.menu, field: m.field,
-                 status: "showing About", done: false }
-    _ -> Model { screen: m.screen, menu: m.menu, field: m.field, status: m.status, done: true }
+    2 -> Model { ...m, screen: ScrPopup, status: "showing About" }
+    _ -> Model { ...m, done: true }
   }
 
 fn update_editing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
   match input.update(m.field, k) {
-    Editing(f)  -> app.keep(Model { screen: ScrEdit, menu: m.menu, field: f, status: m.status, done: false })
-    Done(v)     -> app.keep(Model { screen: ScrMenu, menu: m.menu, field: input.blur(input.with_text(v)),
-                                    status: "saved: #{greet(v)}", done: false })
-    Cancelled   -> app.keep(Model { screen: ScrMenu, menu: m.menu, field: input.blur(m.field),
-                                    status: "cancelled", done: false })
+    Editing(f)  -> app.keep(Model { ...m, field: f })
+    Done(v)     -> app.keep(Model { ...m, screen: ScrMenu, field: input.blur(input.with_text(v)),
+                                    status: "saved: #{greet(v)}" })
+    Cancelled   -> app.keep(Model { ...m, screen: ScrMenu, field: input.blur(m.field),
+                                    status: "cancelled" })
   }
 
 fn update_showing(m: Model, k: term.Key) : app.Step[Model] / Ffi + Clock =
   if popup.dismissed(k) {
-    app.keep(Model { screen: ScrMenu, menu: m.menu, field: m.field, status: "closed popup", done: false })
+    app.keep(Model { ...m, screen: ScrMenu, status: "closed popup" })
   } else { app.keep(m) }
 
 # ---- view: build a Ui value from the model. ----
@@ -104,10 +103,8 @@ fn overlay(m: Model) : Option[Ui] / Clock =
     ScrEdit  -> None
   }
 
-fn with_menu(m: Model, mn: menu.Menu) : Model =
-  Model { screen: m.screen, menu: mn, field: m.field, status: m.status, done: m.done }
-fn with_status(m: Model, s: String) : Model =
-  Model { screen: m.screen, menu: m.menu, field: m.field, status: s, done: m.done }
+fn with_menu(m: Model, mn: menu.Menu) : Model = Model { ...m, menu: mn }
+fn with_status(m: Model, s: String) : Model   = Model { ...m, status: s }
 fn greet(n: String) : String = if n == "" { "stranger" } else { n }
 
 fn main() : Int / Ffi + Clock = {

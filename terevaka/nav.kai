@@ -1,0 +1,21 @@
+# terevaka/nav.kai — cursor arithmetic shared by every list-shaped widget.
+#
+# Imported as `import terevaka.nav`. Pure index math, no Ui and no
+# terminal: menu, listbox, the radio group and the board all move a
+# cursor over a list and all wrap at the ends, so the rule lives here
+# once instead of in each of them.
+
+#[doc("""
+Land index `i` inside a list of `n` items, wrapping at both ends.
+
+Cursor movement, not modulo: stepping off the top lands on the last
+item and stepping off the bottom lands on the first. An empty list has
+nowhere to point, so the cursor stays at 0 — without that case a step
+on an empty list leaves it at -1, an index no lookup can satisfy.
+""")]
+pub fn wrap(i: Int, n: Int) : Int = match i {
+  _ if n <= 0 -> 0
+  x if x < 0  -> n - 1
+  x if x >= n -> 0
+  x           -> x
+}

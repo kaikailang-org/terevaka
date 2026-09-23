@@ -8,6 +8,7 @@
 import terevaka.ui
 import terevaka.term
 import math.int
+import terevaka.nav
 
 #[doc("""
 A scrolling list: the items, the cursor, and the viewport (`offset` is
@@ -41,8 +42,8 @@ pub fn update(l: List, k: term.Key) : List =
 # the cursor visible.
 fn move(l: List, d: Int) : List = {
   let n = list.length(l.items)
-  let cur = wrap(l.cursor + d, n)
-  scroll_to(List { items: l.items, cursor: cur, offset: l.offset, height: l.height })
+  let cur = nav.wrap(l.cursor + d, n)
+  scroll_to(List { ...l, cursor: cur })
 }
 
 # adjust offset so cursor is within [offset, offset+height)
@@ -52,7 +53,7 @@ fn scroll_to(l: List) : List = {
     c if c >= l.offset + l.height    -> c - l.height + 1      # below → snap down
     _                                -> l.offset              # already visible
   }
-  List { items: l.items, cursor: l.cursor, offset: off, height: l.height }
+  List { ...l, offset: off }
 }
 
 # view: the visible window of items, selected one highlighted, plus a
@@ -94,10 +95,4 @@ fn slice_items(items: [String], start: Int, len: Int) : [String] =
 
 fn item_width(items: [String]) : Int =
   list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
-
-fn wrap(i: Int, n: Int) : Int = match i {
-  x if x < 0  -> n - 1
-  x if x >= n -> 0
-  x           -> x
-}
 

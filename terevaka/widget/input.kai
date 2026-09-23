@@ -26,17 +26,17 @@ pub fn init() : Input = Input { text: "", focused: false }
 #[doc("An unfocused field pre-filled with `s`.")]
 pub fn with_text(s: String) : Input = Input { text: s, focused: false }
 #[doc("Give the field focus — it renders a cursor block and takes keys.")]
-pub fn focus(i: Input) : Input = Input { text: i.text, focused: true }
+pub fn focus(i: Input) : Input = Input { ...i, focused: true }
 #[doc("Remove focus, keeping the text.")]
-pub fn blur(i: Input) : Input = Input { text: i.text, focused: false }
+pub fn blur(i: Input) : Input = Input { ...i, focused: false }
 #[doc("The current text.")]
 pub fn value(i: Input) : String = i.text
 
 #[doc("Apply a key: printable chars append, Backspace deletes, Enter commits, Esc cancels.")]
 pub fn update(i: Input, k: term.Key) : Outcome =
   match k {
-    Printable(c) -> Editing(Input { text: i.text ++ "#{c}", focused: i.focused })
-    Backspace    -> Editing(Input { text: drop_last(i.text), focused: i.focused })
+    Printable(c) -> Editing(Input { ...i, text: i.text ++ "#{c}" })
+    Backspace    -> Editing(Input { ...i, text: drop_last(i.text) })
     Enter        -> Done(i.text)
     Esc          -> Cancelled
     _            -> Editing(i)

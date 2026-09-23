@@ -85,7 +85,7 @@ fn loop_framed[m, e](
   first:   Bool
 ) : Unit / Ffi + e = {
   let frame = ui.render(view(model))
-  let painted = if first or not frames_eq(frame, prev) { paint_frame(frame); frame } else { prev }
+  let painted = if first or frame != prev { paint_frame(frame); frame } else { prev }
   match term.poll_key(tick_ms) {
     # End of input: stdin is closed, so no keystroke can ever arrive
     # and a closed descriptor polls ready forever. Leaving this to the
@@ -99,16 +99,6 @@ fn loop_framed[m, e](
            }
   }
 }
-
-# structural equality of two painted frames (line lists)
-fn frames_eq(a: [String], b: [String]) : Bool =
-  match a {
-    []           -> match b { [] -> true   _ -> false }
-    [x, ...ra]   -> match b {
-      []         -> false
-      [y, ...rb] -> if x == y { frames_eq(ra, rb) } else { false }
-    }
-  }
 
 # paint: clear the screen, render the Ui to lines, and write each at
 # its row (offset a couple rows/cols in from the top-left).
@@ -202,16 +192,20 @@ fn loop_overlay_framed[m, e](
 ) : Unit / Ffi + e = {
   let base = view(model)
   let base_lines = ui.render(base)
-  # the separator is an unlikely sentinel line so a base line and an
-  # overlay line can never coincidentally alias across the boundary
-  let sig = match overlay(model) {
-    None     -> base_lines
-    Some(ov) -> base_lines ++ ["#{int_to_char(1)}ovl"] ++ ui.render(ov)
+  # `overlay` carries the user's effect row, so it is performed once
+  # per frame and the result reused for both the signature and the
+  # paint. The separator is an unlikely sentinel line, so a base line
+  # and an overlay line can never coincidentally alias across the
+  # boundary.
+  let ov = overlay(model)
+  let sig = match ov {
+    None      -> base_lines
+    Some(ovl) -> [...base_lines, "#{int_to_char(1)}ovl", ...ui.render(ovl)]
   }
-  let painted = if first or not frames_eq(sig, prev) {
-    match overlay(model) {
-      None     -> paint(base)
-      Some(ov) -> paint_with_overlay(base, ov, 6, 16)
+  let painted = if first or sig != prev {
+    match ov {
+      None      -> paint(base)
+      Some(ovl) -> paint_with_overlay(base, ovl, 6, 16)
     }
     sig
   } else { prev }

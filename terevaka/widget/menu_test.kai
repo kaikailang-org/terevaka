@@ -25,6 +25,10 @@ test "menu — an empty menu has no label and does not move" {
   assert menu.count(m) == 0
   assert menu.selected_label(m) == ""
   assert menu.selected_label(menu.update(m, Down)) == ""
+  # the cursor stays on a real index, so a later move has somewhere to
+  # start from — an unguarded wrap leaves it at -1 here
+  assert menu.selected(menu.update(m, Up)) == 0
+  assert menu.selected(menu.update(m, Down)) == 0
 }
 
 test "menu — unbound keys leave the cursor alone" {

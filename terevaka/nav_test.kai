@@ -1,0 +1,25 @@
+# Tests for terevaka/nav.kai — the wrap rule every list-shaped widget
+# shares. The empty-list case is the one with no valid index at all,
+# so it is the one worth pinning.
+
+import terevaka.nav
+
+test "nav.wrap — an index inside the list is left alone" {
+  assert nav.wrap(0, 3) == 0
+  assert nav.wrap(1, 3) == 1
+  assert nav.wrap(2, 3) == 2
+}
+
+test "nav.wrap — both ends wrap around" {
+  assert nav.wrap(-1, 3) == 2  # off the top → the last item
+  assert nav.wrap(3, 3) == 0  # off the bottom → the first
+}
+
+test "nav.wrap — an empty list keeps the cursor at 0" {
+  # An empty list has no index to land on. Without this case a step
+  # lands on -1, which no lookup can satisfy and no later move
+  # recovers from.
+  assert nav.wrap(-1, 0) == 0
+  assert nav.wrap(0, 0) == 0
+  assert nav.wrap(1, 0) == 0
+}

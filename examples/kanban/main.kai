@@ -123,22 +123,18 @@ fn browse_char(m: Model, c: Char) : app.Step[Model] / Ffi =
   else { app.keep(set_board(m, board.update(m.board, Printable(c)))) } } } } } } }   # h/l/j/k
 
 fn start_add(m: Model) : Model =
-  Model { mode: Adding, board: m.board, field: input.focus(input.init()),
-          confirm: m.confirm, status: "type a card title · Enter add · Esc cancel",
-          next_id: m.next_id, cols: m.cols, rows: m.rows, done: false }
+  Model { ...m, mode: Adding, field: input.focus(input.init()),
+          status: "type a card title · Enter add · Esc cancel" }
 
 fn start_delete(m: Model) : Model =
   match board.selected_card(m.board) {
     None    -> with_status(m, "nothing to delete")
-    Some(_) -> Model { mode: Deleting, board: m.board, field: m.field,
-                       confirm: confirm.make("Delete this card?"), status: m.status,
-                       next_id: m.next_id, cols: m.cols, rows: m.rows, done: false }
+    Some(_) -> Model { ...m, mode: Deleting, confirm: confirm.make("Delete this card?") }
   }
 
 fn update_adding(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match input.update(m.field, k) {
-    Editing(f) -> app.keep(Model { mode: Adding, board: m.board, field: f, confirm: m.confirm,
-                                   status: m.status, next_id: m.next_id, cols: m.cols, rows: m.rows, done: false })
+    Editing(f) -> app.keep(Model { ...m, field: f })
     Done(v)    -> app.keep(finish_add(m, v))
     Cancelled  -> app.keep(with_status(browse(m), "add cancelled"))
   }
@@ -153,8 +149,7 @@ fn finish_add(m: Model, title: String) : Model =
 
 fn update_deleting(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match confirm.update(m.confirm, k) {
-    Pending(c) -> app.keep(Model { mode: Deleting, board: m.board, field: m.field, confirm: c,
-                                   status: m.status, next_id: m.next_id, cols: m.cols, rows: m.rows, done: false })
+    Pending(c) -> app.keep(Model { ...m, confirm: c })
     Yes        -> app.keep(with_status(set_board(browse(m), board.remove_selected(m.board)), "deleted"))
     No         -> app.keep(with_status(browse(m), "delete cancelled"))
   }
@@ -185,18 +180,10 @@ fn overlay(m: Model) : Option[Ui] =
   }
 
 # ---- helpers ----
-fn browse(m: Model) : Model =
-  Model { mode: Browse, board: m.board, field: m.field, confirm: m.confirm, status: m.status,
-          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
-fn set_board(m: Model, b: board.Board) : Model =
-  Model { mode: m.mode, board: b, field: m.field, confirm: m.confirm, status: m.status,
-          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
-fn with_status(m: Model, s: String) : Model =
-  Model { mode: m.mode, board: m.board, field: m.field, confirm: m.confirm, status: s,
-          next_id: m.next_id, cols: m.cols, rows: m.rows, done: m.done }
-fn bump_id(m: Model) : Model =
-  Model { mode: m.mode, board: m.board, field: m.field, confirm: m.confirm, status: m.status,
-          next_id: m.next_id + 1, cols: m.cols, rows: m.rows, done: m.done }
+fn browse(m: Model) : Model                    = Model { ...m, mode: Browse }
+fn set_board(m: Model, b: board.Board) : Model = Model { ...m, board: b }
+fn with_status(m: Model, s: String) : Model    = Model { ...m, status: s }
+fn bump_id(m: Model) : Model                   = Model { ...m, next_id: m.next_id + 1 }
 
 fn main() : Int / Ffi = {
   let cols = term.cols()
