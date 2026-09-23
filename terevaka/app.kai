@@ -9,7 +9,7 @@
 # key arrives on idle and the view refreshes — letting a clock or
 # spinner advance without a keystroke. This poll bridge is what v0.1
 # ships; the design's fiber form (input-pump fiber + widget actors
-# under a nursery) is v0.2. A raw read on the reactor parks the fiber
+# under a nursery) is v0.3. A raw read on the reactor parks the fiber
 # rather than the scheduler, so what remains there is the work.
 #
 # `run` is generic over the user's model type `m` via passed

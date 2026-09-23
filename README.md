@@ -4,13 +4,13 @@ A terminal-UI (TUI) framework for [kaikai](https://github.com/lnds/kaikai).
 The terminal face of the lnds ecosystem — what `manutara` is for the
 web, terevaka is for the terminal.
 
-> **Status:** v0.1 — a working framework. The `Ui` value tree, the
+> **Status:** v0.2 — a working framework. The `Ui` value tree, the
 > terminal layer (with robust size detection), eight widgets (menu,
 > listbox, input, form, popup, confirm, statusbar, board), and a
 > Model/update/view runtime with a flicker-free in-place repaint all
-> compile and run on `kai 0.117.0`. The full-screen kanban example
+> compile and run on `kai 0.121.0`. The full-screen kanban example
 > exercises the lot. The fiber/nursery architecture from
-> `docs/design.md` (each live widget its own actor) is **v0.2**. The
+> `docs/design.md` (each live widget its own actor) is **v0.3**. The
 > upstream blocker (raw-mode-on-the-reactor) has closed and the close
 > is measured — see §*What's a value vs what's deferred*.
 
@@ -144,7 +144,7 @@ receives the keystroke sent to it — so the read parks the fiber rather
 than the scheduler, which is the property v0.1's `poll()` loop exists
 to work around.
 
-v0.2 is therefore unblocked, and what remains is design work rather
+v0.3 is therefore unblocked, and what remains is design work rather
 than a dependency: widgets become actors, the input pump and
 render become sibling fibers under a nursery, and the
 spinner-during-task pattern (verified in `docs/design.md`) wires into
@@ -164,7 +164,7 @@ a real interactive app.
   threaded by the app, not fibers (see *What's a value vs deferred*).
   The clock/spinner tick via the poll loop; a spinner *during a real
   in-flight request*, a live `tail -f`, or panels at independent rates
-  need the fiber architecture — v0.2, now unblocked (see the section
+  need the fiber architecture — v0.3, now unblocked (see the section
   above): what remains is the work, not a dependency.
 - **No mouse, no resize handling (`SIGWINCH`).** Keyboard-first.
 - **UTC clock only** (no localtime in stdlib yet).
@@ -184,7 +184,7 @@ include = ["c"]
 `kai build` compiles and links it from there, so no target passes it
 by hand — the `Makefile` only wires up the dependency graph and the
 example binaries. Requirements: `kai` on `PATH` (needs 0.112.0 or
-newer for `[native]`; verified against 0.117.0), a C compiler.
+newer for `[native]`; verified against 0.121.0), a C compiler.
 
 ```sh
 make            # build all examples (demo, gallery, kanban)
@@ -226,7 +226,7 @@ the old behaviour for a build that cannot be changed yet.
 terevaka/
 ├── kai.toml
 ├── Makefile                  # examples + tests; the shim rides in kai.toml
-├── docs/design.md            # the architecture (incl. the fiber v0.2 plan)
+├── docs/design.md            # the architecture (incl. the fiber v0.3 plan)
 ├── c/terevaka_term.{c,h}     # terminal shim (raw mode, poll, write, size)
 ├── terevaka/                 # the importable modules
 │   ├── term.kai
@@ -238,7 +238,7 @@ terevaka/
 │   ├── demo/main.kai         # menu + input + popup + live clock
 │   ├── gallery/main.kai      # split-pane, listbox, form, confirm, focus
 │   └── kanban/main.kai       # full-screen kanban board
-└── tools/                    # the raw-mode parking probe (the v0.2 gate)
+└── tools/                    # the raw-mode parking probe (the v0.3 gate)
 ```
 
 ## License
