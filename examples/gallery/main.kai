@@ -1,4 +1,4 @@
-# examples/gallery/main.kai — a widget gallery showing the v0.2 set.
+# examples/gallery/main.kai — a gallery of the widgets the demo leaves out.
 #
 # A two-pane layout: a scrolling list on the left, a form (checkbox +
 # radio + button) on the right, a status bar at the bottom, and a

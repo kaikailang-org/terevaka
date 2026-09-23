@@ -95,7 +95,7 @@ fn overlay(m: Model) : Option[Ui] / Clock =
     ScrPopup -> Some(popup.view(popup.make("About terevaka", [
                  "A TUI framework for kaikai.",
                  "The UI tree IS a supervision",
-                 "tree — fibers come in v0.2.",
+                 "tree — fibers come in v0.3.",
                  "",
                  term.fg(220, "Enter / Esc to close")
                ])))
