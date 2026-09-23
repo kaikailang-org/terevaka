@@ -14,7 +14,7 @@ fn ticker(n: Int, acc: Int) : Int / Clock + Ffi =
 fn reader() : String / Stdin = Stdin.read_bytes(1)
 
 fn main() : Int / Ffi + Spawn + Clock + Stdin = {
-  term.raw_enable()
+  let _ = term.raw_enable()
   term.write("raw mode on\r\n")
   let r = spawn.spawn(reader)
   let ticks = ticker(6, 0)

@@ -18,7 +18,7 @@ TVK_SRC := $(wildcard terevaka/*.kai) $(wildcard terevaka/widget/*.kai)
 
 SHIM_SRC := c/terevaka_term.c c/terevaka_term.h
 
-.PHONY: all example gallery kanban run run-gallery run-kanban test test-eof test-probe clean
+.PHONY: all example gallery kanban run run-gallery run-kanban test test-notty test-probe clean
 
 all: example gallery kanban
 
@@ -55,21 +55,31 @@ run-kanban: kanban
 # names each module as it runs, which is what CI reports against.
 TEST_SRC := $(wildcard terevaka/*_test.kai) $(wildcard terevaka/widget/*_test.kai)
 
-test: test-eof test-probe
+test: test-notty test-probe
 	@set -e; for t in $(TEST_SRC); do \
 	  echo "== $$t"; \
 	  $(KAI_BIN) test $$t; \
 	done
 
-# Regression for the EOF spin: a closed stdin polls ready forever, so
-# an app that treats end-of-input as an unrecognised key never blocks
-# and never exits. Not a `kai test` case — it needs a real process with
-# its stdin closed. The alarm is the whole point: on regression the
-# demo never returns, so without it this target would hang CI.
-test-eof: $(BUILD)/demo
-	@perl -e 'alarm 5; exec @ARGV' ./$(BUILD)/demo < /dev/null > /dev/null 2>&1 \
-	  && echo "== eof: app exits on closed stdin" \
-	  || { echo "FAIL: app did not exit on closed stdin (spinning?)"; exit 1; }
+# What happens when the app is handed no terminal — a pipe, a redirect,
+# CI. Not a `kai test` case: it needs a real process whose stdin is not
+# a tty. The alarm is the whole point, since the failure this guards
+# against is one that never returns.
+#
+# This supersedes the old `test-eof`. That target ran the same command,
+# but back when raw mode could fail unnoticed the app entered its loop
+# anyway and the run ended through the loop's end-of-input branch
+# (issue #6). The refusal now happens before the loop starts, so that
+# route is closed from further out. The branch stays in `loop_framed`:
+# it still answers a descriptor that dies mid-session, and nothing here
+# reaches it any more.
+test-notty: $(BUILD)/demo
+	@perl -e 'alarm 5; \
+	  my $$out = `./$(BUILD)/demo < /dev/null 2>&1`; my $$code = $$? >> 8; \
+	  die "FAIL: exited $$code, expected 1\n" unless $$code == 1; \
+	  die "FAIL: no diagnostic on the way out\n" unless $$out =~ /not a terminal/; \
+	  die "FAIL: painted escapes at something that is not a terminal\n" if $$out =~ /\e/; \
+	  print "== notty: refuses without a terminal, exits 1, paints nothing\n"'
 
 # The probe regression needs something on the other end of a real pty to
 # play the terminal, so it runs under a Python driver rather than as a

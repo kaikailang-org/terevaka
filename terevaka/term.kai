@@ -25,8 +25,14 @@ extern "C" fn kai_tvk_term_cols() : Int / Ffi
 Put the terminal into raw mode: no line buffering, no echo, so keys
 arrive one byte at a time. Pair every call with `raw_disable`, or the
 shell is left unusable after the program exits.
+
+Returns whether raw mode actually came on. It does not when stdin is
+not a terminal — a pipe, a redirect, a CI job — and a caller that
+ignores that goes on to drive a UI over a descriptor that will never
+deliver a keystroke. `raw_disable` is safe either way: it restores
+nothing when there was nothing to save.
 """)]
-pub fn raw_enable() : Unit / Ffi = { let _ = kai_tvk_raw_enable(); () }
+pub fn raw_enable() : Bool / Ffi = kai_tvk_raw_enable() == 0
 
 #[doc("Restore the terminal settings saved by `raw_enable`.")]
 pub fn raw_disable() : Unit / Ffi = { let _ = kai_tvk_raw_disable(); () }
