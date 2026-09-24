@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## [Unreleased]
+
+### Changed
+
+- **The stated compiler version is now 0.124.1**, verified by
+  rebuilding the three examples from clean and running `make test`: 83
+  tests across 15 files. No source change was needed to move from
+  0.121.0.
+
 ## v0.4.0 (2026-09-23)
 
 ### BREAKING CHANGE
