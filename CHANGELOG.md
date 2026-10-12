@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## v0.4.1 (2026-10-12)
+
+### Fixed
+
+- **`make test-probe` no longer skips on a machine with a Python
+  version manager.** `python3` there is a shim that resolves to nothing
+  unless a version is pinned for the directory, and the target read
+  that as "no interpreter" and moved on — so the only test of the
+  probe's pty behaviour quietly never ran. It now tries the system
+  interpreter before giving up, and names whichever one answered so a
+  fallback is visible rather than silent. The skip is back to meaning
+  what it says: no usable interpreter at all.
+
+- **`terevaka/app_test.kai` dropped an unused `terevaka.ui` import**,
+  the suite's only compiler warning.
+
+### Changed
+
+- **The stated compiler version is now 0.142.0**, verified by
+  rebuilding the three examples from clean and running `make test`: 83
+  cases across 13 files, plus the no-tty and pty-probe checks. No
+  source change was needed to come from 0.121.0 — 21 releases without
+  a break reaching terevaka.
+
 ## v0.4.0 (2026-09-23)
 
 ### BREAKING CHANGE
