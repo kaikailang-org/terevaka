@@ -91,13 +91,22 @@ PYTHON ?= python3
 $(BUILD)/term_probe_check: tools/term_probe_check.kai $(TVK_SRC) $(SHIM_SRC) | $(BUILD)
 	$(KAI_BIN) build tools/term_probe_check.kai -o $@
 
+# Tries $(PYTHON), then the system interpreter. On a machine with a version
+# manager, `python3` is a shim that resolves to nothing unless a version is
+# pinned for the directory — and skipping there means the only test of the
+# probe's pty behaviour quietly never runs. The skip is for a machine with
+# no usable interpreter at all; the line names whichever one answered.
 test-probe: $(BUILD)/term_probe_check
-	@if $(PYTHON) -c 'import pty' >/dev/null 2>&1; then \
-	  $(PYTHON) tools/term_probe_check.py $(BUILD)/term_probe_check answer >/dev/null && \
-	  $(PYTHON) tools/term_probe_check.py $(BUILD)/term_probe_check silent  >/dev/null && \
-	  echo "== probe: answered and silent terminals both handled, raw mode restored"; \
+	@py=""; \
+	for cand in $(PYTHON) /usr/bin/python3; do \
+	  if $$cand -c 'import pty' >/dev/null 2>&1; then py=$$cand; break; fi; \
+	done; \
+	if [ -n "$$py" ]; then \
+	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check answer >/dev/null && \
+	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check silent  >/dev/null && \
+	  echo "== probe: answered and silent terminals both handled, raw mode restored ($$py)"; \
 	else \
-	  echo "== probe: SKIPPED (no working '$(PYTHON)'; try PYTHON=/usr/bin/python3)"; \
+	  echo "== probe: SKIPPED (no interpreter with 'pty'; set PYTHON=/path/to/python3)"; \
 	fi
 
 clean:

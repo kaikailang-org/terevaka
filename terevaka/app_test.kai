@@ -10,7 +10,6 @@
 #   - the examples, which are built on every `make`.
 
 import terevaka.app
-import terevaka.ui
 
 fn decision(s: app.Step[Int]) : String = match s {
   Continue(m) -> "continue:#{m}"
