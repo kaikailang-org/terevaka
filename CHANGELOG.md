@@ -10,10 +10,25 @@ the surface is pre-1.0 (every release may break shape).
 
 ### Changed
 
-- **The stated compiler version is now 0.124.1**, verified by
+- **The stated compiler version is now 0.142.0**, verified by
   rebuilding the three examples from clean and running `make test`: 83
-  tests across 15 files. No source change was needed to move from
-  0.121.0.
+  cases across 13 files, plus the no-tty and pty-probe checks. No
+  source change was needed to move from 0.121.0 through 0.142.0 — 21
+  releases without a break reaching terevaka.
+
+### Fixed
+
+- **`make test-probe` no longer skips on a machine with a Python
+  version manager.** `python3` there is a shim that resolves to nothing
+  unless a version is pinned for the directory, and the target read
+  that as "no interpreter" and moved on — so the only test of the
+  probe's pty behaviour quietly never ran, on this machine included. It
+  now tries the system interpreter before giving up and names whichever
+  one answered. The skip is back to meaning what it says: no usable
+  interpreter at all.
+
+- **`terevaka/app_test.kai` dropped an unused `terevaka.ui` import**,
+  the suite's only compiler warning.
 
 ## v0.4.0 (2026-09-23)
 
