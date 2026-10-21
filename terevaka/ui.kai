@@ -268,7 +268,8 @@ fn pad_heights(blocks: [[String]], h: Int) : [[String]] =
 fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
   if extra <= 0 { b } else { b ++ list.repeat(spaces(w), extra) }
 
-# glue N blocks (all same height) line by line, with a 1-space gutter
+# glue N blocks (all same height) line by line, `gutter` between each pair
+# (`render_row` passes "": a Row's children sit flush, boxes bring their own border)
 fn glue_blocks(blocks: [[String]], gutter: String) : [String] =
   match list.reverse(blocks) {
     []              -> []
