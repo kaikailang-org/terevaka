@@ -252,14 +252,14 @@ fn block_of(lines: [String]) : [String] = pad_block_width(lines, max_width(lines
 
 # widest line of a block, in display columns (0 for an empty block)
 fn max_width(lines: [String]) : Int =
-  list.max(lines | (l) => visible_len(l)).unwrap_or(0)
+  list.max(lines | visible_len(.)) ?? 0
 
 fn pad_block_width(lines: [String], w: Int) : [String] =
   lines | (l) => fit(l, w)
 
 # tallest block, in lines
 fn max_height(blocks: [[String]]) : Int =
-  list.max(blocks | .length()).unwrap_or(0)
+  list.max(blocks | list.length) ?? 0
 
 # pad each block to `h` lines by appending blank lines (full-width)
 fn pad_heights(blocks: [[String]], h: Int) : [[String]] =

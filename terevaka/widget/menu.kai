@@ -24,7 +24,7 @@ pub fn init(items: [String]) : Menu = Menu { items: items, cursor: 0 }
 pub fn count(m: Menu) : Int = list.length(m.items)
 
 #[doc("The selected item's label, or the empty string when there are none.")]
-pub fn selected_label(m: Menu) : String = list.nth(m.items, m.cursor).unwrap_or("")
+pub fn selected_label(m: Menu) : String = list.nth(m.items, m.cursor) ?? ""
 
 #[doc("The cursor index.")]
 pub fn selected(m: Menu) : Int = m.cursor
@@ -59,4 +59,4 @@ fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
 
 # widest item, for a uniform highlight bar (0 when there are none)
 fn item_width(items: [String]) : Int =
-  list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
+  list.max(items | ui.visible_len(.)) ?? 0

@@ -54,7 +54,7 @@ pub fn radio(options: [String]) : Radio =
 #[doc("The index of the selected option.")]
 pub fn radio_chosen(r: Radio) : Int = r.chosen
 #[doc("The label of the selected option, or the empty string when there are none.")]
-pub fn radio_chosen_label(r: Radio) : String = list.nth(r.options, r.chosen).unwrap_or("")
+pub fn radio_chosen_label(r: Radio) : String = list.nth(r.options, r.chosen) ?? ""
 
 #[doc("Up/Down or k/j move the highlight; Space or Enter select what it is on.")]
 pub fn radio_update(r: Radio, k: term.Key) : Radio =

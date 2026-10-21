@@ -28,7 +28,7 @@ test "popup — body lines are framed, not measured out of the box" {
   let p = popup.make("about", ["hola"])
   let lines = ui.render(popup.view(p))
   # every line of a box is the same width, borders included
-  let w0 = ui.visible_len(list.nth(lines, 0).unwrap_or(""))
-  let w1 = ui.visible_len(list.nth(lines, 1).unwrap_or(""))
+  let w0 = ui.visible_len(list.nth(lines, 0) ?? "")
+  let w1 = ui.visible_len(list.nth(lines, 1) ?? "")
   assert w0 == w1
 }
