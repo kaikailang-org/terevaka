@@ -270,10 +270,9 @@ fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
 
 # glue N blocks (all same height) line by line, with a 1-space gutter
 fn glue_blocks(blocks: [[String]], gutter: String) : [String] =
-  match blocks {
-    []           -> []
-    [b]          -> b
-    [b, ...rest] -> zip_lines(b, glue_blocks(rest, gutter), gutter)
+  match list.reverse(blocks) {
+    []              -> []
+    [last, ...rest] -> list.foldl(rest, last, (glued, b) => zip_lines(b, glued, gutter))
   }
 
 fn zip_lines(a: [String], b: [String], gutter: String) : [String] =
