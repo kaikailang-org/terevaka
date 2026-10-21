@@ -105,27 +105,31 @@ int64_t kai_tvk_write(const char *s) {
  * terminal, immune to stdio redirection), then stderr/stdin/stdout,
  * then the COLUMNS/LINES environment variables, before the last-resort
  * hardcoded fallback. `want_cols` selects which dimension to return. */
-static int64_t kai_tvk_winsize(int want_cols) {
+
+/* The selected dimension as `fd` reports it, or 0 when the ioctl fails
+ * or reports zero (a pty whose size was never set). */
+static int64_t kai_tvk_fd_dim(int fd, int want_cols) {
     struct winsize ws;
+    if (ioctl(fd, TIOCGWINSZ, &ws) != 0) return 0;
+    return (int64_t) (want_cols ? ws.ws_col : ws.ws_row);
+}
+
+static int64_t kai_tvk_winsize(int want_cols) {
+    int64_t dim = 0;
 
     /* /dev/tty is the controlling terminal regardless of fd redirection */
     int tty = open("/dev/tty", O_RDONLY | O_NOCTTY);
     if (tty >= 0) {
-        int ok = (ioctl(tty, TIOCGWINSZ, &ws) == 0);
+        dim = kai_tvk_fd_dim(tty, want_cols);
         close(tty);
-        if (ok) {
-            if (want_cols && ws.ws_col > 0) return (int64_t) ws.ws_col;
-            if (!want_cols && ws.ws_row > 0) return (int64_t) ws.ws_row;
-        }
+        if (dim > 0) return dim;
     }
 
     /* any of the standard fds may still be the terminal */
     int fds[3] = { STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO };
     for (int i = 0; i < 3; i++) {
-        if (ioctl(fds[i], TIOCGWINSZ, &ws) == 0) {
-            if (want_cols && ws.ws_col > 0) return (int64_t) ws.ws_col;
-            if (!want_cols && ws.ws_row > 0) return (int64_t) ws.ws_row;
-        }
+        dim = kai_tvk_fd_dim(fds[i], want_cols);
+        if (dim > 0) return dim;
     }
 
     /* environment hint (export COLUMNS/LINES, or a shell that sets them) */
