@@ -76,7 +76,7 @@ test "reply_body — no terminator can ever match" {
 
 test "reply_body — the terminator is stripped, not just detected" {
   let st   = "#{term.esc()}\\"
-  let body = term.reply_body("payload#{st}", [st]).unwrap_or("")
+  let body = term.reply_body("payload#{st}", [st]) ?? ""
   assert body == "payload"
   # no fragment of the terminator survives in the body
   assert string.index_of(body, term.esc()) == None

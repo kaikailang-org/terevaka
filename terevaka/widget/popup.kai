@@ -37,4 +37,4 @@ Draw the result as an overlay (`app.run_overlay` or
 flow.
 """)]
 pub fn view(p: Popup) : Ui =
-  ui.box_color(212, p.width, p.title, ui.col(p.lines | (l) => ui.text(l)))
+  ui.box_color(212, p.width, p.title, ui.col(p.lines | ui.text(.)))

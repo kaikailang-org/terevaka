@@ -24,7 +24,7 @@ pub fn init(items: [String], height: Int) : List =
 #[doc("The cursor index, absolute in the item list — not relative to the viewport.")]
 pub fn selected(l: List) : Int = l.cursor
 #[doc("The selected item's label, or the empty string when there are none.")]
-pub fn selected_label(l: List) : String = list.nth(l.items, l.cursor).unwrap_or("")
+pub fn selected_label(l: List) : String = list.nth(l.items, l.cursor) ?? ""
 
 #[doc("""
 Move the cursor with Up/Down or k/j, wrapping at both ends, and scroll
@@ -94,5 +94,5 @@ fn slice_items(items: [String], start: Int, len: Int) : [String] =
   list.take(list.drop(items, start), len)
 
 fn item_width(items: [String]) : Int =
-  list.max(items | (s) => ui.visible_len(s)).unwrap_or(0)
+  list.max(items | ui.visible_len(.)) ?? 0
 
