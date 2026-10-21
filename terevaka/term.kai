@@ -229,23 +229,27 @@ pub fn probe(request: String, terminators: [String], first_ms: Int) : Option[Str
 # the same short beat `escape_seq` gives a pending arrow sequence.
 fn read_reply(terminators: [String], ms: Int, acc_rev: [Byte]) : Option[String] / Ffi =
   if list.length(acc_rev) >= reply_cap() { None }
+  else { next_byte(ms) || (b => reply_or_read(terminators, [b, ...acc_rev])) }
+
+# The body once the bytes so far end in a terminator, else read on.
+fn reply_or_read(terminators: [String], acc_rev: [Byte]) : Option[String] / Ffi =
+  match reply_body(string.from_bytes(list.reverse(acc_rev)), terminators) {
+    Some(body) -> Some(body)
+    None       -> read_reply(terminators, follow_ms(), acc_rev)
+  }
+
+# The next byte within `ms`. A timeout, end of input or a read error
+# all mean the same here: no answer is coming.
+fn next_byte(ms: Int) : Option[Byte] / Ffi = {
+  let code = kai_tvk_poll_key(ms)
+  if code < 0 { None }
   else {
-    match kai_tvk_poll_key(ms) {
-      # timeout, end of input or a read error: no answer is coming
-      b if b < 0 -> None
-      b -> match int_to_byte(b) {
-        Err(_)   -> None
-        Ok(byte) -> {
-          let next = [byte, ...acc_rev]
-          let raw  = string.from_bytes(list.reverse(next))
-          match reply_body(raw, terminators) {
-            Some(body) -> Some(body)
-            None       -> read_reply(terminators, follow_ms(), next)
-          }
-        }
-      }
+    match int_to_byte(code) {
+      Ok(byte) -> Some(byte)
+      Err(_)   -> None
     }
   }
+}
 
 # How long to wait for each byte after the first. The reply arrives as
 # one burst, so this bounds the tail without a clock.
