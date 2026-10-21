@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## v0.4.2 (2026-10-21)
+
+### Fix
+
+- build on kaikai 0.170.0, which drops method-call syntax
+
+### Refactor
+
+- **ui**: glue row blocks with a fold instead of non-tail recursion
+- **term**: flatten read_reply into byte, check and recurse
+- **term**: read one window dimension through a single helper
+
 ## v0.4.1 (2026-10-12)
 
 ### Fixed
