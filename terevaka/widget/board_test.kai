@@ -66,3 +66,9 @@ test "board — navigation wraps across columns" {
   assert board.active_column(board.update(b, Right)) == 1
   assert board.active_column(board.update(board.update(b, Right), Right)) == 0
 }
+
+test "board — moving the last card of a column leaves the cursor on a real card" {
+  let b = board.update(fixture(), Down)  # cursor on A-2, the last of "todo"
+  let back = board.update(board.move_card_right(b), Left)
+  assert ref_of(board.selected_card(back)) == "A-1"
+}
