@@ -136,11 +136,9 @@ fn move_card(b: Board, d: Int) : Board {
     match list.nth(src.cards, src.cursor) {
       None -> b
       Some(c) -> {
-        let src2 = Column {
-          ...src,
-          cards: remove_at(src.cards, src.cursor),
-          cursor: clamp_cursor(src.cursor, list.length(src.cards) - 1)
-        }
+        let rest = remove_at(src.cards, src.cursor)
+        let src2 =
+          Column { ...src, cards: rest, cursor: clamp_cursor(src.cursor, list.length(rest) - 1) }
         let dst = nth_col(b.columns, dst_i)
         let dst2 = Column { ...dst, cards: [c, ...dst.cards], cursor: 0 }
         let b1 = set_col(b, src_i, src2)
