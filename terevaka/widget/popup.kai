@@ -20,10 +20,10 @@ pub fn make(title: String, lines: [String]) : Popup =
 #[doc("Whether `k` dismisses the popup: Enter, Esc or q.")]
 pub fn dismissed(k: term.Key) : Bool =
   match k {
-    Enter        -> true
-    Esc          -> true
+    Enter -> true
+    Esc -> true
     Printable(c) -> c == 'q'
-    _            -> false
+    _ -> false
   }
 
 #[doc("""

@@ -13,12 +13,12 @@ Derived from epoch seconds by integer arithmetic, since the stdlib has
 no localtime — the trailing "UTC" is part of the string so a reader is
 never misled about the zone.
 """)]
-pub fn hhmmss_utc() : String / Clock = {
+pub fn hhmmss_utc() : String / Clock {
   let secs = time.now().secs
-  let day  = secs % 86400
-  let h    = day / 3600
-  let m    = (day % 3600) / 60
-  let s    = day % 60
+  let day = secs % 86400
+  let h = day / 3600
+  let m = day % 3600 / 60
+  let s = day % 60
   "#{pad2(h)}:#{pad2(m)}:#{pad2(s)} UTC"
 }
 

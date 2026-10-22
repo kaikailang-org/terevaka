@@ -22,7 +22,7 @@ test "radio — moving the cursor does not change the choice" {
   assert form.radio_chosen(r) == 0
 
   let moved = form.radio_update(r, Down)
-  assert form.radio_chosen(moved) == 0            # still the first
+  assert form.radio_chosen(moved) == 0  # still the first
   assert form.radio_chosen_label(moved) == "one"
 }
 

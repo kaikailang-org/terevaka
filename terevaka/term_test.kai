@@ -59,7 +59,7 @@ test "reply_body — an unterminated reply is not a reply yet" {
 test "reply_body — the first matching terminator wins" {
   # OSC 11 closes with ST on some terminals and BEL on others, which is
   # why the caller passes a list rather than one string
-  let st  = "#{term.esc()}\\"
+  let st = "#{term.esc()}\\"
   let bel = "#{int_to_char(7)}"
   assert term.reply_body("rgb:1111/2222/3333#{bel}", [st, bel]) == Some("rgb:1111/2222/3333")
   assert term.reply_body("rgb:1111/2222/3333#{st}", [st, bel]) == Some("rgb:1111/2222/3333")
@@ -75,7 +75,7 @@ test "reply_body — no terminator can ever match" {
 }
 
 test "reply_body — the terminator is stripped, not just detected" {
-  let st   = "#{term.esc()}\\"
+  let st = "#{term.esc()}\\"
   let body = term.reply_body("payload#{st}", [st]) ?? ""
   assert body == "payload"
   # no fragment of the terminator survives in the body

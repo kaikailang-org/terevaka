@@ -23,12 +23,16 @@ pub type Outcome = Editing(Input) | Done(String) | Cancelled
 
 #[doc("An empty, unfocused field.")]
 pub fn init() : Input = Input { text: "", focused: false }
+
 #[doc("An unfocused field pre-filled with `s`.")]
 pub fn with_text(s: String) : Input = Input { text: s, focused: false }
+
 #[doc("Give the field focus — it renders a cursor block and takes keys.")]
 pub fn focus(i: Input) : Input = Input { ...i, focused: true }
+
 #[doc("Remove focus, keeping the text.")]
 pub fn blur(i: Input) : Input = Input { ...i, focused: false }
+
 #[doc("The current text.")]
 pub fn value(i: Input) : String = i.text
 
@@ -36,14 +40,14 @@ pub fn value(i: Input) : String = i.text
 pub fn update(i: Input, k: term.Key) : Outcome =
   match k {
     Printable(c) -> Editing(Input { ...i, text: i.text ++ "#{c}" })
-    Backspace    -> Editing(Input { ...i, text: drop_last(i.text) })
-    Enter        -> Done(i.text)
-    Esc          -> Cancelled
-    _            -> Editing(i)
+    Backspace -> Editing(Input { ...i, text: drop_last(i.text) })
+    Enter -> Done(i.text)
+    Esc -> Cancelled
+    _ -> Editing(i)
   }
 
 #[doc("Render as `label ⟨ text ⟩`, with a cursor block when focused.")]
-pub fn view(lbl: String, i: Input) : Ui = {
+pub fn view(lbl: String, i: Input) : Ui {
   let shown = if i.text == "" { term.dim("(empty)") } else { i.text }
   let cursor = if i.focused { term.fg(83, "▏") } else { "" }
   ui.row([
@@ -60,7 +64,7 @@ pub fn view(lbl: String, i: Input) : Ui = {
 # multibyte codepoint and leaves mojibake behind; `string.chars`
 # iterates real codepoints, so dropping the last of those is the edit
 # the user asked for.
-fn drop_last(s: String) : String = {
+fn drop_last(s: String) : String {
   let cs = string.chars(s)
   let n = list.length(cs)
   if n == 0 { "" } else { string.from_chars(list.take(cs, n - 1)) }

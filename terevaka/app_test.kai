@@ -13,7 +13,7 @@ import terevaka.app
 
 fn decision(s: app.Step[Int]) : String = match s {
   Continue(m) -> "continue:#{m}"
-  Quit        -> "quit"
+  Quit -> "quit"
 }
 
 test "app — keep carries the next model, quit carries none" {

@@ -22,7 +22,7 @@ pub type Answer = Pending(Confirm) | Yes | No
 
 #[doc("A dialog for `question`, defaulting to Yes highlighted.")]
 pub fn make(question: String) : Confirm =
-  Confirm { question: question, on_yes: true }      # defaults to Yes highlighted
+  Confirm { question: question, on_yes: true }  # defaults to Yes highlighted
 
 #[doc("""
 Apply a key: h/l or Left/Right move the highlight, Enter answers with
@@ -30,12 +30,12 @@ it, y/n answer directly, Esc is No.
 """)]
 pub fn update(c: Confirm, k: term.Key) : Answer =
   match k {
-    Left         -> Pending(Confirm { ...c, on_yes: true })
-    Right        -> Pending(Confirm { ...c, on_yes: false })
+    Left -> Pending(Confirm { ...c, on_yes: true })
+    Right -> Pending(Confirm { ...c, on_yes: false })
     Printable(ch) -> nav_char(c, ch)
-    Enter        -> if c.on_yes { Yes } else { No }
-    Esc          -> No
-    _            -> Pending(c)
+    Enter -> if c.on_yes { Yes } else { No }
+    Esc -> No
+    _ -> Pending(c)
   }
 
 fn nav_char(c: Confirm, ch: Char) : Answer = match ch {
@@ -43,16 +43,21 @@ fn nav_char(c: Confirm, ch: Char) : Answer = match ch {
   'l' -> Pending(Confirm { ...c, on_yes: false })
   'y' -> Yes
   'n' -> No
-  _   -> Pending(c)
+  _ -> Pending(c)
 }
 
 #[doc("Render the question with the Yes/No buttons, the highlighted one filled.")]
-pub fn view(c: Confirm) : Ui = {
-  let yes = if c.on_yes  { term.bg(83, term.fg(236, " Yes ")) } else { term.fg(245, " Yes ") }
-  let no  = if c.on_yes  { term.fg(245, " No ") }  else { term.bg(210, term.fg(236, " No ")) }
-  ui.box_color(210, 32, "confirm", ui.col([
-    ui.text(c.question),
-    ui.blank(),
-    ui.row([ ui.text(yes), ui.text("  "), ui.text(no) ])
-  ]))
+pub fn view(c: Confirm) : Ui {
+  let yes = if c.on_yes { term.bg(83, term.fg(236, " Yes ")) } else { term.fg(245, " Yes ") }
+  let no = if c.on_yes { term.fg(245, " No ") } else { term.bg(210, term.fg(236, " No ")) }
+  ui.box_color(
+    210,
+    32,
+    "confirm",
+    ui.col([
+      ui.text(c.question),
+      ui.blank(),
+      ui.row([ui.text(yes), ui.text("  "), ui.text(no)])
+    ])
+  )
 }

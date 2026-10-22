@@ -23,6 +23,7 @@ pub fn init(items: [String], height: Int) : List =
 
 #[doc("The cursor index, absolute in the item list — not relative to the viewport.")]
 pub fn selected(l: List) : Int = l.cursor
+
 #[doc("The selected item's label, or the empty string when there are none.")]
 pub fn selected_label(l: List) : String = list.nth(l.items, l.cursor) ?? ""
 
@@ -32,26 +33,30 @@ the viewport to keep it visible.
 """)]
 pub fn update(l: List, k: term.Key) : List =
   match k {
-    Up           -> move(l, -1)
-    Down         -> move(l, 1)
-    Printable(c) -> match c { 'k' -> move(l, -1)   'j' -> move(l, 1)   _ -> l }
-    _            -> l
+    Up -> move(l, -1)
+    Down -> move(l, 1)
+    Printable(c) -> match c {
+      'k' -> move(l, -1)
+      'j' -> move(l, 1)
+      _ -> l
+    }
+    _ -> l
   }
 
 # move the cursor by d, wrapping, then scroll the viewport to keep
 # the cursor visible.
-fn move(l: List, d: Int) : List = {
+fn move(l: List, d: Int) : List {
   let n = list.length(l.items)
   let cur = nav.wrap(l.cursor + d, n)
   scroll_to(List { ...l, cursor: cur })
 }
 
 # adjust offset so cursor is within [offset, offset+height)
-fn scroll_to(l: List) : List = {
+fn scroll_to(l: List) : List {
   let off = match l.cursor {
-    c if c < l.offset                -> c                     # scrolled above → snap up
-    c if c >= l.offset + l.height    -> c - l.height + 1      # below → snap down
-    _                                -> l.offset              # already visible
+    c if c < l.offset -> c  # scrolled above → snap up
+    c if c >= l.offset + l.height -> c - l.height + 1  # below → snap down
+    _ -> l.offset  # already visible
   }
   List { ...l, offset: off }
 }
@@ -62,7 +67,7 @@ fn scroll_to(l: List) : List = {
 Render the visible window plus a scroll hint (`▲`/`▼` and an
 `n-m/total` counter), so the block is always `height + 1` lines.
 """)]
-pub fn view(l: List) : Ui = {
+pub fn view(l: List) : Ui {
   let n = list.length(l.items)
   let w = item_width(l.items)
   let visible = slice_items(l.items, l.offset, l.height)
@@ -77,13 +82,13 @@ fn render_rows(items: [String], cursor: Int, base: Int, w: Int) : [Ui] =
 
 fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
   if sel {
-    ui.row([ ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ") ])
+    ui.row([ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ")])
   } else {
-    ui.row([ ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ") ])
+    ui.row([ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ")])
   }
 
-fn scroll_hint(offset: Int, height: Int, n: Int) : Ui = {
-  let up   = if offset > 0 { "▲" } else { " " }
+fn scroll_hint(offset: Int, height: Int, n: Int) : Ui {
+  let up = if offset > 0 { "▲" } else { " " }
   let down = if offset + height < n { "▼" } else { " " }
   ui.label(245, "  #{up} #{down}  #{offset + 1}-#{int.min(offset + height, n)}/#{n}")
 }
@@ -93,6 +98,4 @@ fn scroll_hint(offset: Int, height: Int, n: Int) : Ui = {
 fn slice_items(items: [String], start: Int, len: Int) : [String] =
   list.take(list.drop(items, start), len)
 
-fn item_width(items: [String]) : Int =
-  list.max(items | ui.visible_len(.)) ?? 0
-
+fn item_width(items: [String]) : Int = list.max(items | ui.visible_len(.)) ?? 0

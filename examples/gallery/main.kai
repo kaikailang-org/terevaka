@@ -23,60 +23,70 @@ import terevaka.widget.confirm
 type Focus = OnList | OnCheck | OnRadio | OnButton
 
 type Model = {
-  focus:   Focus,
-  files:   listbox.List,
-  notify:  form.Checkbox,
-  theme:   form.Radio,
-  save:    form.Button,
-  asking:  Bool,                 # confirm dialog open?
+  focus: Focus,
+  files: listbox.List,
+  notify: form.Checkbox,
+  theme: form.Radio,
+  save: form.Button,
+  asking: Bool,  # confirm dialog open?
   confirm: confirm.Confirm,
-  status:  String,
-  done:    Bool
+  status: String,
+  done: Bool
 }
 
 fn initial() : Model = Model {
-  focus:   OnList,
-  files:   listbox.init(["main.kai","ui.kai","app.kai","term.kai","clock.kai","menu.kai","input.kai","popup.kai"], 5),
-  notify:  form.checkbox("Notifications", true),
-  theme:   form.radio(["Dark","Light","Auto"]),
-  save:    form.button("Save changes"),
-  asking:  false,
+  focus: OnList,
+  files: listbox.init(
+    [
+      "main.kai", "ui.kai", "app.kai", "term.kai", "clock.kai", "menu.kai", "input.kai",
+      "popup.kai"
+    ],
+    5
+  ),
+  notify: form.checkbox("Notifications", true),
+  theme: form.radio(["Dark", "Light", "Auto"]),
+  save: form.button("Save changes"),
+  asking: false,
   confirm: confirm.make("Save changes?"),
-  status:  "Tab: next field · Space/Enter: act · q: quit",
-  done:    false
+  status: "Tab: next field · Space/Enter: act · q: quit",
+  done: false
 }
 
 # ---- update ----
 fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi =
-  if m.done { app.quit() }
-  else { if m.asking { update_confirm(m, k) }
-  else {
-    match k {
-      Printable(c) -> if c == 'q' { app.quit() } else { route(m, k) }
-      _            -> route(m, k)
+  if m.done {
+    app.quit()
+  } else {
+    if m.asking {
+      update_confirm(m, k)
+    } else {
+      match k {
+        Printable(c) -> if c == 'q' { app.quit() } else { route(m, k) }
+        _ -> route(m, k)
+      }
     }
-  } }
+  }
 
 # Tab cycles focus; anything else goes to the focused widget.
 fn route(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match k {
     Tab -> app.keep(next_focus(m))
-    _   -> to_widget(m, k)
+    _ -> to_widget(m, k)
   }
 
 fn to_widget(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match m.focus {
-    OnList   -> app.keep(set_files(m, listbox.update(m.files, k)))
-    OnCheck  -> app.keep(set_notify(m, form.checkbox_update(m.notify, k)))
-    OnRadio  -> app.keep(set_theme(m, form.radio_update(m.theme, k)))
+    OnList -> app.keep(set_files(m, listbox.update(m.files, k)))
+    OnCheck -> app.keep(set_notify(m, form.checkbox_update(m.notify, k)))
+    OnRadio -> app.keep(set_theme(m, form.radio_update(m.theme, k)))
     OnButton -> if form.button_pressed(k) { app.keep(open_confirm(m)) } else { app.keep(m) }
   }
 
 fn next_focus(m: Model) : Model =
   set_focus(m, match m.focus {
-    OnList   -> OnCheck
-    OnCheck  -> OnRadio
-    OnRadio  -> OnButton
+    OnList -> OnCheck
+    OnCheck -> OnRadio
+    OnRadio -> OnButton
     OnButton -> OnList
   })
 
@@ -86,16 +96,16 @@ fn open_confirm(m: Model) : Model =
 fn update_confirm(m: Model, k: term.Key) : app.Step[Model] / Ffi =
   match confirm.update(m.confirm, k) {
     Pending(c) -> app.keep(Model { ...m, asking: true, confirm: c })
-    Yes        -> app.keep(close_confirm(m, "saved! theme=#{form.radio_chosen_label(m.theme)}"))
-    No         -> app.keep(close_confirm(m, "cancelled"))
+    Yes -> app.keep(close_confirm(m, "saved! theme=#{form.radio_chosen_label(m.theme)}"))
+    No -> app.keep(close_confirm(m, "cancelled"))
   }
 
 fn close_confirm(m: Model, status: String) : Model =
   Model { ...m, asking: false, status: status }
 
 # ---- view: a split-pane + status bar ----
-fn view(m: Model) : Ui = {
-  let left  = listbox.view(m.files)
+fn view(m: Model) : Ui {
+  let left = listbox.view(m.files)
   let right = ui.col([
     form.checkbox_view(m.notify, focus_is(m, OnCheck)),
     ui.blank(),
@@ -123,24 +133,51 @@ fn overlay(m: Model) : Option[Ui] =
 
 # ---- helpers ----
 fn focus_is(m: Model, f: Focus) : Bool = focus_eq(m.focus, f)
+
 fn focus_eq(a: Focus, b: Focus) : Bool =
   match a {
-    OnList   -> match b { OnList -> true   OnCheck -> false  OnRadio -> false  OnButton -> false }
-    OnCheck  -> match b { OnList -> false  OnCheck -> true   OnRadio -> false  OnButton -> false }
-    OnRadio  -> match b { OnList -> false  OnCheck -> false  OnRadio -> true   OnButton -> false }
-    OnButton -> match b { OnList -> false  OnCheck -> false  OnRadio -> false  OnButton -> true }
+    OnList -> match b {
+      OnList -> true
+      OnCheck -> false
+      OnRadio -> false
+      OnButton -> false
+    }
+    OnCheck -> match b {
+      OnList -> false
+      OnCheck -> true
+      OnRadio -> false
+      OnButton -> false
+    }
+    OnRadio -> match b {
+      OnList -> false
+      OnCheck -> false
+      OnRadio -> true
+      OnButton -> false
+    }
+    OnButton -> match b {
+      OnList -> false
+      OnCheck -> false
+      OnRadio -> false
+      OnButton -> true
+    }
   }
 
 # the left panel title shows ▸ when the list is focused
 fn focus_tag(m: Model, f: Focus, base: String) : String =
   if focus_is(m, f) { "▸ " ++ base } else { base }
 
-fn set_focus(m: Model, f: Focus) : Model          = Model { ...m, focus: f }
-fn set_files(m: Model, l: listbox.List) : Model   = Model { ...m, files: l }
+fn set_focus(m: Model, f: Focus) : Model = Model { ...m, focus: f }
+
+fn set_files(m: Model, l: listbox.List) : Model = Model { ...m, files: l }
+
 fn set_notify(m: Model, c: form.Checkbox) : Model = Model { ...m, notify: c }
-fn set_theme(m: Model, r: form.Radio) : Model     = Model { ...m, theme: r }
+
+fn set_theme(m: Model, r: form.Radio) : Model = Model { ...m, theme: r }
 
 fn main() : Int / Ffi = match app.run_overlay(initial(), update, view, overlay, 200) {
-  Ok(_)    -> 0
-  Err(msg) -> { term.write(msg ++ "\n"); 1 }   # no terminal: see the demo
+  Ok(_) -> 0
+  Err(msg) -> {
+    term.write(msg ++ "\n")
+    1  # no terminal: see the demo
+  }
 }

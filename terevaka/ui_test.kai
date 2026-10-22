@@ -11,9 +11,9 @@ import terevaka.term
 
 test "visible_len — display columns, not codepoints" {
   assert ui.visible_len("hello") == 5
-  assert ui.visible_len("▸ Edit") == 6          # arrow is narrow
-  assert ui.visible_len("你好") == 4             # 2 wide codepoints
-  assert ui.visible_len("🎉") == 2               # wide emoji, not 1
+  assert ui.visible_len("▸ Edit") == 6  # arrow is narrow
+  assert ui.visible_len("你好") == 4  # 2 wide codepoints
+  assert ui.visible_len("🎉") == 2  # wide emoji, not 1
   assert ui.visible_len("你▸🎉a") == 6
   assert ui.visible_len("") == 0
 }
@@ -30,12 +30,12 @@ test "truncate / cell — measured and cut in columns" {
   # The ellipsis costs one column, leaving width-1 for the text. A wide
   # glyph is taken whole or not at all, so a budget that ends mid-glyph
   # stops one column short rather than splitting it.
-  assert ui.truncate("🎉🎉🎉", 5) == "🎉🎉…"      # 4 columns of text + 1
+  assert ui.truncate("🎉🎉🎉", 5) == "🎉🎉…"  # 4 columns of text + 1
   assert ui.visible_len(ui.truncate("🎉🎉🎉", 5)) == 5
-  assert ui.visible_len(ui.truncate("🎉🎉🎉", 4)) == 3   # only one fits
+  assert ui.visible_len(ui.truncate("🎉🎉🎉", 4)) == 3  # only one fits
   # budget 6 is the interesting boundary: two emoji plus the ellipsis
   # need 5, and the third cannot fit in the column left over.
-  assert ui.truncate("🎉🎉🎉", 6) == "🎉🎉🎉"            # 6 columns exactly, no cut
+  assert ui.truncate("🎉🎉🎉", 6) == "🎉🎉🎉"  # 6 columns exactly, no cut
   assert ui.visible_len(ui.truncate("🎉🎉🎉🎉", 6)) == 5
   assert ui.visible_len(ui.cell("你好世界", 5)) == 5
   assert ui.visible_len(ui.cell("ab", 6)) == 6
