@@ -2,6 +2,7 @@
 # the multibyte edge, since backspace works on the text as a string.
 
 import terevaka.widget.input
+import terevaka.ui
 import terevaka.term
 
 fn typed(i: input.Input, s: [Char]) : input.Input = match s {
@@ -50,4 +51,28 @@ test "input — unhandled keys leave the field untouched" {
   let i = input.with_text("keep")
   assert text_of(input.update(i, Tick)) == "keep"
   assert text_of(input.update(i, Eof)) == "keep"
+}
+
+fn shown(lbl: String, i: input.Input) : [String] = ui.render(input.view(lbl, i))
+
+fn field(lbl: String, inner: String) : [String] =
+  [term.dim(lbl) ++ term.fg(75, "⟨") ++ inner ++ term.fg(75, "⟩")]
+
+test "input — the view shows the text, a placeholder when empty, a cursor when focused" {
+  assert shown("name", input.with_text("ab")) == field("name", " ab ")
+  assert shown("name", input.init()) == field("name", " " ++ term.dim("(empty)") ++ " ")
+  assert shown("name", input.focus(input.with_text("ab")))
+    == field("name", " ab" ++ term.fg(83, "▏") ++ " ")
+  assert shown("name", input.blur(input.focus(input.with_text("ab")))) == field("name", " ab ")
+}
+
+test "input — only Enter commits, only Esc cancels" {
+  let i = input.with_text("hola")
+  let done = o => match o {
+    Done(_) -> true
+    _ -> false
+  }
+  assert done(input.update(i, Enter))
+  assert not done(input.update(i, Tick))
+  assert not done(input.update(i, Printable('x')))
 }

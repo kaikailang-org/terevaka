@@ -4,6 +4,7 @@
 
 import terevaka.widget.statusbar
 import terevaka.ui
+import terevaka.term
 
 test "statusbar — renders one line" {
   let bar = statusbar.view([statusbar.hint("q", "quit")])
@@ -27,4 +28,18 @@ test "statusbar — separators go between hints, not after" {
 
 test "statusbar — no hints renders an empty line" {
   assert ui.visible_len(list.nth(ui.render(statusbar.view([])), 0) ?? "x") == 0
+}
+
+test "statusbar — keys, actions and separators each carry their colour" {
+  let bar = statusbar.view([statusbar.hint("q", "quit"), statusbar.hint("j", "down")])
+  assert ui.render(bar)
+    == [
+      term.fg(44, "q")
+        ++ " "
+        ++ term.fg(245, "quit")
+        ++ term.fg(238, "  ·  ")
+        ++ term.fg(44, "j")
+        ++ " "
+        ++ term.fg(245, "down")
+    ]
 }

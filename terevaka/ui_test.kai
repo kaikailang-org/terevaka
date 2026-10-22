@@ -51,3 +51,39 @@ test "row — blocks glue left to right, padded to the tallest" {
   assert ui.render(ui.row([ui.text("x")])) == ["x"]
   assert ui.render(ui.row([])) == []
 }
+
+test "styles — each one renders to its own escape" {
+  assert ui.render(ui.text("x")) == ["x"]
+  assert ui.render(ui.label(31, "x")) == [term.fg(31, "x")]
+  assert ui.render(ui.title("x")) == [term.bold(term.fg(44, "x"))]
+  assert ui.render(ui.muted("x")) == [term.dim("x")]
+}
+
+test "box — a border as wide as the body, with or without a title" {
+  let side = s => term.fg(75, "│ ") ++ s ++ term.fg(75, " │")
+  assert ui.render(ui.box(6, "", ui.text("hi")))
+    == [
+      term.fg(75, "╭──────╮"),
+      side("hi  "),
+      term.fg(75, "╰──────╯")
+    ]
+  assert ui.render(ui.box(6, "ab", ui.text("hi")))
+    == [
+      term.fg(75, "╭─ ") ++ term.bold("ab") ++ term.fg(75, " ─╮"),
+      side("hi  "),
+      term.fg(75, "╰──────╯")
+    ]
+}
+
+test "box — an explicit height pads or cuts the body; 0 keeps it" {
+  let two = ui.col([ui.text("a"), ui.text("b")])
+  assert list.length(ui.render(ui.box_filled(75, 6, 3, "", two))) == 5  # padded to 3
+  assert list.length(ui.render(ui.box_filled(75, 6, 1, "", two))) == 3  # cut to 1
+  assert list.length(ui.render(ui.box_filled(75, 6, 0, "", two))) == 4  # natural
+}
+
+test "box — without a height, the body keeps every line" {
+  let two = ui.col([ui.text("a"), ui.text("b")])
+  assert list.length(ui.render(ui.box(6, "", two))) == 4
+  assert list.length(ui.render(ui.box_color(75, 6, "", two))) == 4
+}

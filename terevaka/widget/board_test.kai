@@ -72,3 +72,45 @@ test "board — moving the last card of a column leaves the cursor on a real car
   let back = board.update(board.move_card_right(b), Left)
   assert ref_of(board.selected_card(back)) == "A-1"
 }
+
+test "board — the cursor moves within a column and wraps" {
+  let b = fixture()
+  assert ref_of(board.selected_card(board.update(b, Down))) == "A-2"
+  assert ref_of(board.selected_card(board.update(b, Up))) == "A-2"  # wraps to the last
+  assert ref_of(board.selected_card(board.update(board.update(b, Down), Down))) == "A-1"
+}
+
+test "board — reordering stops at both ends of the column" {
+  let last = board.update(fixture(), Down)  # A-2, at the bottom
+  let up = board.move_card_up(last)
+  assert ref_of(board.selected_card(up)) == "A-2"
+  assert ref_of(board.selected_card(board.update(up, Down))) == "A-1"
+
+  let stuck = board.move_card_down(last)
+  assert ref_of(board.selected_card(stuck)) == "A-2"
+  assert ref_of(board.selected_card(board.update(stuck, Up))) == "A-1"
+}
+
+test "board — removing the last card moves the cursor up to the new last" {
+  let added = board.add_card(fixture(), "A-3", "three")
+  assert ref_of(board.selected_card(board.remove_selected(added))) == "A-2"
+}
+
+test "board — a card cannot move off a single-column board" {
+  let b = board.init([board.column("only", 75, [board.card("A-1", Task, "one")])], 20, 0)
+  let moved = board.move_card_right(b)
+  assert board.active_column(moved) == 0
+  assert ref_of(board.selected_card(moved)) == "A-1"
+}
+
+# Three cards, so a reorder cannot be mistaken for the cursor wrapping.
+test "board — reordering moves the card one place and the cursor with it" {
+  let mid = board.update(board.add_card(fixture(), "A-3", "three"), Up)  # on A-2, in the middle
+  let up = board.move_card_up(mid)  # A-2, A-1, A-3
+  assert ref_of(board.selected_card(up)) == "A-2"
+  assert ref_of(board.selected_card(board.update(up, Down))) == "A-1"
+
+  let down = board.move_card_down(mid)  # A-1, A-3, A-2
+  assert ref_of(board.selected_card(down)) == "A-2"
+  assert ref_of(board.selected_card(board.update(down, Up))) == "A-3"
+}

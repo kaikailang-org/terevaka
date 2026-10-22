@@ -36,3 +36,8 @@ test "clock — every field keeps two digits" {
   assert s == "00:00:05 UTC"
   assert string.length(s) == 12
 }
+
+test "clock — two-digit values are not padded again" {
+  assert at(10) == "00:00:10 UTC"  # the first value that needs no zero
+  assert at(36000 + 600 + 10) == "10:10:10 UTC"
+}
