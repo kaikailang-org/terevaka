@@ -32,3 +32,8 @@ test "popup — body lines are framed, not measured out of the box" {
   let w1 = ui.visible_len(list.nth(lines, 1) ?? "")
   assert w0 == w1
 }
+
+test "popup — the frame is drawn in magenta" {
+  let top = list.nth(ui.render(popup.view(popup.make("", ["x"]))), 0) ?? ""
+  assert string.starts_with(top, "#{term.esc()}[38;5;212m╭")
+}

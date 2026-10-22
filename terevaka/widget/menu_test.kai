@@ -36,3 +36,9 @@ test "menu — unbound keys leave the cursor alone" {
   assert menu.selected(menu.update(m, Printable('x'))) == 1
   assert menu.selected(menu.update(m, Tab)) == 1
 }
+
+test "menu — Up moves back one, wrapping from the first to the last" {
+  let m = menu.init(["a", "b", "c"])
+  assert menu.selected(menu.update(m, Up)) == 2
+  assert menu.selected(menu.update(menu.update(m, Down), Up)) == 0
+}

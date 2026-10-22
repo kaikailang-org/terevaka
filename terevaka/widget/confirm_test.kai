@@ -3,6 +3,7 @@
 # contract the app depends on.
 
 import terevaka.widget.confirm
+import terevaka.ui
 import terevaka.term
 
 fn answer(a: confirm.Answer) : String = match a {
@@ -41,4 +42,38 @@ test "confirm — an unrelated key keeps the dialog open unchanged" {
   let c = confirm.make("delete?")
   assert answer(confirm.update(c, Printable('x'))) == "pending:yes"
   assert answer(confirm.update(c, Tick)) == "pending:yes"
+}
+
+# The buttons sit on the last body line, inside the box's 30 columns.
+fn buttons_line(c: confirm.Confirm) : String = list.nth(ui.render(confirm.view(c)), 3) ?? ""
+
+fn framed(s: String) : String = term.fg(210, "│ ") ++ ui.fit(s, 30) ++ term.fg(210, " │")
+
+test "confirm — the view frames the question and fills the highlighted button" {
+  let c = confirm.make("delete?")
+  let lines = ui.render(confirm.view(c))
+  assert list.length(lines) == 5
+  assert (list.nth(lines, 0) ?? "")
+    == term.fg(210, "╭─ ")
+      ++ term.bold("confirm")
+      ++ term.fg(210, " " ++ string.repeat("─", 22) ++ "╮")
+  assert (list.nth(lines, 1) ?? "") == framed("delete?")
+  assert buttons_line(c)
+    == framed(term.bg(83, term.fg(236, " Yes ")) ++ "  " ++ term.fg(245, " No "))
+
+  let on_no = match confirm.update(c, Right) {
+    Pending(next) -> next
+    _ -> c
+  }
+  assert buttons_line(on_no)
+    == framed(term.fg(245, " Yes ") ++ "  " ++ term.bg(210, term.fg(236, " No ")))
+}
+
+test "confirm — Left and h bring the highlight back to Yes" {
+  let on_no = match confirm.update(confirm.make("delete?"), Right) {
+    Pending(next) -> next
+    _ -> confirm.make("delete?")
+  }
+  assert answer(confirm.update(on_no, Left)) == "pending:yes"
+  assert answer(confirm.update(on_no, Printable('h'))) == "pending:yes"
 }

@@ -50,3 +50,37 @@ test "listbox — an empty list keeps the cursor on a real index" {
   assert listbox.selected(listbox.update(l, Down)) == 0
   assert listbox.selected_label(listbox.update(l, Up)) == ""
 }
+
+# The scroll hint is the last rendered line: arrows for what lies above
+# and below the window, then the visible range.
+fn hint(l: listbox.List) : String {
+  let lines = ui.render(listbox.view(l))
+  list.nth(lines, list.length(lines) - 1) ?? ""
+}
+
+fn hint_of(up: String, down: String, range: String) : String =
+  term.fg(245, "  #{up} #{down}  #{range}")
+
+test "listbox — the window scrolls only once the cursor leaves it" {
+  let l = listbox.init(["a", "b", "c", "d", "e"], 3)
+  assert hint(l) == hint_of(" ", "▼", "1-3/5")
+  assert hint(down_n(l, 2)) == hint_of(" ", "▼", "1-3/5")  # last visible row
+  assert hint(down_n(l, 3)) == hint_of("▲", "▼", "2-4/5")  # one past it
+  assert hint(down_n(l, 4)) == hint_of("▲", " ", "3-5/5")  # bottom: nothing below
+}
+
+test "listbox — wrapping to either end brings the window with it" {
+  let l = listbox.init(["a", "b", "c", "d", "e"], 3)
+  assert hint(down_n(l, 5)) == hint_of(" ", "▼", "1-3/5")  # bottom wraps to top
+  assert hint(listbox.update(l, Up)) == hint_of("▲", " ", "3-5/5")
+}
+
+test "listbox — the cursor row is highlighted at its absolute index" {
+  let rows = ui.render(listbox.view(down_n(listbox.init(["a", "b", "c", "d", "e"], 3), 3)))
+  assert list.take(rows, 3)
+    == [
+      " " ++ term.dim(" b "),
+      " " ++ term.dim(" c "),
+      term.fg(220, "▸") ++ term.bg(44, term.fg(236, " d "))
+    ]
+}
