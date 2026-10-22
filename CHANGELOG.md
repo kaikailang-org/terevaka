@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project versions track Semantic Versioning loosely while
 the surface is pre-1.0 (every release may break shape).
 
+## v0.4.3 (2026-10-21)
+
+### Fix
+
+- **board**: clamp the source cursor to the column left after a move
+
 ## v0.4.2 (2026-10-21)
 
 ### Fix
