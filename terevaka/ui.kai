@@ -26,12 +26,12 @@ Deliberately a closed set rather than arbitrary ANSI: a style is
 resolved to escape codes only at render time, so a `Ui` stays a
 comparable value.
 """)]
-pub type Style =
-  Plain
-  | Fg(Int)            # 256-color foreground
-  | FgBold(Int)        # foreground + bold
+pub type Style
+  = Plain
+  | Fg(Int)  # 256-color foreground
+  | FgBold(Int)  # foreground + bold
   | Dim
-  | Selected(Int)      # a "selected" row: colored background, dark fg
+  | Selected(Int)  # a "selected" row: colored background, dark fg
 
 # ---- The Ui tree. ----
 #[doc("""
@@ -42,13 +42,13 @@ Building one is effect-free, which is what makes views testable by
 structural equality — no terminal is involved until the app runtime
 writes the rendered lines.
 """)]
-pub type Ui =
-  Text(Style, String)
-  | Line                       # a blank line
-  | Col([Ui])                  # stack children vertically
-  | Row([Ui])                  # place children side by side (single-line)
+pub type Ui
+  = Text(Style, String)
+  | Line  # a blank line
+  | Col([Ui])  # stack children vertically
+  | Row([Ui])  # place children side by side (single-line)
   | Box(Int, Int, Int, String, Ui)  # framed: (border color, inner width, inner height, title, child)
-  | Pad(Int, Ui)               # indent child by N spaces
+  | Pad(Int, Ui)  # indent child by N spaces
 
 # ---- Smart constructors (the ergonomic surface). ----
 #[doc("One line of unstyled text.")]
@@ -92,7 +92,8 @@ and its one-column padding on each side.
 pub fn box(width: Int, ttl: String, child: Ui) : Ui = Box(75, width, 0, ttl, child)
 
 #[doc("`box` with an explicit border color.")]
-pub fn box_color(color: Int, width: Int, ttl: String, child: Ui) : Ui = Box(color, width, 0, ttl, child)
+pub fn box_color(color: Int, width: Int, ttl: String, child: Ui) : Ui =
+  Box(color, width, 0, ttl, child)
 
 #[doc("""
 A box stretched to an explicit inner height.
@@ -110,7 +111,7 @@ Two boxed panels side by side, each with its own inner width and
 title. The 2-case of `columns`.
 """)]
 pub fn split(lw: Int, lt: String, left: Ui, rw: Int, rt: String, right: Ui) : Ui =
-  Row([ box(lw, lt, left), box(rw, rt, right) ])
+  Row([box(lw, lt, left), box(rw, rt, right)])
 
 #[doc("""
 N panels side by side — the general form `split` specialises.
@@ -148,8 +149,11 @@ fn vis_loop(cs: [Char], in_esc: Bool, acc: Int) : Int =
         if c == 'm' { vis_loop(rest, false, acc) } else { vis_loop(rest, true, acc) }
       } else {
         let cp = char_to_int(c)
-        if cp == 27 { vis_loop(rest, true, acc) }              # ESC: start color seq
-        else { vis_loop(rest, false, acc + text.char_width(cp)) }
+        if cp == 27 {
+          vis_loop(rest, true, acc)  # ESC: start color seq
+        } else {
+          vis_loop(rest, false, acc + text.char_width(cp))
+        }
       }
   }
 
@@ -163,7 +167,7 @@ Pad `s` on the right to `width` display columns.
 A string already at or past `width` is returned unchanged — use `cell`
 when the result must be exactly `width` columns.
 """)]
-pub fn fit(s: String, width: Int) : String = {
+pub fn fit(s: String, width: Int) : String {
   let v = visible_len(s)
   if v >= width { s } else { s ++ spaces(width - v) }
 }
@@ -176,10 +180,13 @@ A wide glyph is taken whole or not at all, so the result never
 straddles a column. Assumes `s` carries no ANSI codes: colour the
 result, do not truncate coloured text.
 """)]
-pub fn truncate(s: String, width: Int) : String = {
+pub fn truncate(s: String, width: Int) : String {
   let v = visible_len(s)
-  if v <= width { s }
-  else { take_cols(string.chars(s), width - 1, 0, "") ++ "…" }
+  if v <= width {
+    s
+  } else {
+    take_cols(string.chars(s), width - 1, 0, "") ++ "…"
+  }
 }
 
 # take the first `n` visible columns of a codepoint list. A glyph is
@@ -187,11 +194,14 @@ pub fn truncate(s: String, width: Int) : String = {
 # limit is dropped, so the result never exceeds `n` columns.
 fn take_cols(cs: [Char], n: Int, taken: Int, acc: String) : String =
   match cs {
-    []           -> acc
+    [] -> acc
     [c, ...rest] -> {
       let w = text.char_width(char_to_int(c))
-      if taken + w > n { acc }
-      else { take_cols(rest, n, taken + w, acc ++ "#{c}") }
+      if taken + w > n {
+        acc
+      } else {
+        take_cols(rest, n, taken + w, acc ++ "#{c}")
+      }
     }
   }
 
@@ -201,11 +211,11 @@ pub fn cell(s: String, width: Int) : String = fit(truncate(s, width), width)
 # apply a Style to a raw string, producing the colored string
 fn styled(st: Style, s: String) : String =
   match st {
-    Plain        -> s
-    Fg(c)        -> term.fg(c, s)
-    FgBold(c)    -> term.bold(term.fg(c, s))
-    Dim          -> term.dim(s)
-    Selected(c)  -> term.bg(c, term.fg(236, s))
+    Plain -> s
+    Fg(c) -> term.fg(c, s)
+    FgBold(c) -> term.bold(term.fg(c, s))
+    Dim -> term.dim(s)
+    Selected(c) -> term.bg(c, term.fg(236, s))
   }
 
 #[doc("""
@@ -218,11 +228,11 @@ rely on.
 """)]
 pub fn render(u: Ui) : [String] =
   match u {
-    Text(st, s)   -> [styled(st, s)]
-    Line          -> [""]
-    Col(kids)     -> render_all(kids)
+    Text(st, s) -> [styled(st, s)]
+    Line -> [""]
+    Col(kids) -> render_all(kids)
     Pad(n, child) -> pad_lines(render(child), n)
-    Row(kids)        -> render_row(kids)
+    Row(kids) -> render_row(kids)
     Box(col, w, h, t, c) -> render_box(col, w, h, t, render(c))
   }
 
@@ -231,39 +241,37 @@ fn render_all(kids: [Ui]) : [String] = list.flat_map(kids, render)
 
 # indent every line of a block by n spaces
 fn pad_lines(lines: [String], n: Int) : [String] =
-  lines | (l) => spaces(n) ++ l
+  lines | (l => spaces(n) ++ l)
 
 # Row: lay children side by side, MULTI-LINE. Each child renders to a
 # block of lines; we pad every block to a uniform width (its widest
 # line) and height (the tallest block), then glue the blocks line by
 # line with a 1-space gutter. This makes split-panes, sidebars, and
 # (ASCII) tables expressible, not just single-line label rows.
-fn render_row(kids: [Ui]) : [String] = {
-  let blocks = blockify(kids)        # each child -> a width-uniform block
+fn render_row(kids: [Ui]) : [String] {
+  let blocks = blockify(kids)  # each child -> a width-uniform block
   let h = max_height(blocks)
   glue_blocks(pad_heights(blocks, h), "")
 }
 
 # render each child and pad its lines to the block's own width
 fn blockify(kids: [Ui]) : [[String]] =
-  kids | (k) => block_of(render(k))
+  kids | (k => block_of(render(k)))
 
 fn block_of(lines: [String]) : [String] = pad_block_width(lines, max_width(lines))
 
 # widest line of a block, in display columns (0 for an empty block)
-fn max_width(lines: [String]) : Int =
-  list.max(lines | visible_len(.)) ?? 0
+fn max_width(lines: [String]) : Int = list.max(lines | visible_len(.)) ?? 0
 
 fn pad_block_width(lines: [String], w: Int) : [String] =
-  lines | (l) => fit(l, w)
+  lines | (l => fit(l, w))
 
 # tallest block, in lines
-fn max_height(blocks: [[String]]) : Int =
-  list.max(blocks | list.length) ?? 0
+fn max_height(blocks: [[String]]) : Int = list.max(blocks | list.length) ?? 0
 
 # pad each block to `h` lines by appending blank lines (full-width)
 fn pad_heights(blocks: [[String]], h: Int) : [[String]] =
-  blocks | (b) => extend_lines(b, max_width(b), h - list.length(b))
+  blocks | (b => extend_lines(b, max_width(b), h - list.length(b)))
 
 fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
   if extra <= 0 { b } else { b ++ list.repeat(spaces(w), extra) }
@@ -272,7 +280,7 @@ fn extend_lines(b: [String], w: Int, extra: Int) : [String] =
 # (`render_row` passes "": a Row's children sit flush, boxes bring their own border)
 fn glue_blocks(blocks: [[String]], gutter: String) : [String] =
   match list.reverse(blocks) {
-    []              -> []
+    [] -> []
     [last, ...rest] -> list.foldl(rest, last, (glued, b) => zip_lines(b, glued, gutter))
   }
 
@@ -290,12 +298,14 @@ fn zip_lines(a: [String], b: [String], gutter: String) : [String] =
 # the body is fit to exactly `h` lines (padded with blanks below, or
 # truncated from the bottom if the content is taller); `h <= 0` keeps
 # the body's natural height.
-fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = {
+fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] {
   let top = if t == "" {
     term.fg(col, "╭" ++ string.repeat("─", w) ++ "╮")
   } else {
     let tv = visible_len(t)
-    term.fg(col, "╭─ ") ++ term.bold(t) ++ term.fg(col, " " ++ string.repeat("─", w - tv - 3) ++ "╮")
+    term.fg(col, "╭─ ")
+      ++ term.bold(t)
+      ++ term.fg(col, " " ++ string.repeat("─", w - tv - 3) ++ "╮")
   }
   let bot = term.fg(col, "╰" ++ string.repeat("─", w) ++ "╯")
   let sized = if h <= 0 { body } else { fit_height(body, h) }
@@ -309,7 +319,7 @@ fn render_box(col: Int, w: Int, h: Int, t: String, body: [String]) : [String] = 
 # bordered blank row without us duplicating the width/color work here.
 fn fit_height(lines: [String], h: Int) : [String] = match list.length(lines) {
   n if n > h -> list.take(lines, h)
-  n          -> lines ++ list.repeat("", h - n)
+  n -> lines ++ list.repeat("", h - n)
 }
 
 # A content row spans EXACTLY the same width as the top/bottom border.
@@ -320,7 +330,7 @@ fn fit_height(lines: [String], h: Int) : [String] = match list.length(lines) {
 # symmetric one-space padding on both sides fixes the alignment.
 fn box_body(col: Int, lines: [String], w: Int) : [String] =
   match lines {
-    []           -> []
-    [l, ...rest] -> [term.fg(col, "│ ") ++ fit(l, w - 2) ++ term.fg(col, " │"), ...box_body(col, rest, w)]
+    [] -> []
+    [l, ...rest] ->
+      [term.fg(col, "│ ") ++ fit(l, w - 2) ++ term.fg(col, " │"), ...box_body(col, rest, w)]
   }
-

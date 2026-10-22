@@ -51,12 +51,13 @@ offer a non-interactive path instead.
 """)]
 pub fn run[m, e](
   initial: m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   tick_ms: Int
 ) : Result[Unit, String] / Ffi + e =
-  if not term.raw_enable() { Err(no_terminal()) }
-  else {
+  if not term.raw_enable() {
+    Err(no_terminal())
+  } else {
     term.write(term.hide_cursor())
     # Clear the screen ONCE on entry, so whatever was in the terminal
     # before (the shell prompt, prior output) does not show through the
@@ -85,22 +86,27 @@ fn no_terminal() : String =
 # identical frame paints nothing. The first iteration passes a sentinel
 # empty frame so the initial view is always painted.
 fn loop[m, e](
-  model:   m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  model: m,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   tick_ms: Int
 ) : Unit / Ffi + e = loop_framed(model, update, view, tick_ms, [], true)
 
 fn loop_framed[m, e](
-  model:   m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  model: m,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   tick_ms: Int,
-  prev:    [String],
-  first:   Bool
-) : Unit / Ffi + e = {
+  prev: [String],
+  first: Bool
+) : Unit / Ffi + e {
   let frame = ui.render(view(model))
-  let painted = if first or frame != prev { paint_frame(frame); frame } else { prev }
+  let painted = if first or frame != prev {
+    paint_frame(frame)
+    frame
+  } else {
+    prev
+  }
   match term.poll_key(tick_ms) {
     # End of input: stdin is closed, so no keystroke can ever arrive
     # and a closed descriptor polls ready forever. Leaving this to the
@@ -108,10 +114,10 @@ fn loop_framed[m, e](
     # runtime ends the loop itself — the app still gets its teardown
     # from `run`, which restores the terminal either way.
     Eof -> ()
-    k   -> match update(model, k) {
-             Quit           -> ()
-             Continue(next) -> loop_framed(next, update, view, tick_ms, painted, false)
-           }
+    k -> match update(model, k) {
+      Quit -> ()
+      Continue(next) -> loop_framed(next, update, view, tick_ms, painted, false)
+    }
   }
 }
 
@@ -131,14 +137,14 @@ fn paint(u: Ui) : Unit / Ffi = paint_frame(ui.render(u))
 # state. A trailing ESC[J wipes any lines the previous (taller) frame
 # left below this one; for a full-screen board that never fires, but
 # it keeps a shrinking frame clean.
-fn paint_frame(lines: [String]) : Unit / Ffi = {
+fn paint_frame(lines: [String]) : Unit / Ffi {
   paint_lines(lines, 2, 4)
   term.write(term.esc() ++ "[J")
 }
 
 fn paint_lines(lines: [String], row: Int, col: Int) : Unit / Ffi =
   match lines {
-    []           -> ()
+    [] -> ()
     [l, ...rest] -> {
       term.write(term.goto(row, col) ++ term.clear_eol() ++ l)
       paint_lines(rest, row + 1, col)
@@ -153,7 +159,7 @@ Paint `base`, then draw `overlay` on top of it at (`orow`, `ocol`).
 The overlay is written over the base rather than composited into it,
 so the base is not disturbed — this is how modal popups are drawn.
 """)]
-pub fn paint_with_overlay(base: Ui, overlay: Ui, orow: Int, ocol: Int) : Unit / Ffi = {
+pub fn paint_with_overlay(base: Ui, overlay: Ui, orow: Int, ocol: Int) : Unit / Ffi {
   term.write(term.clear())
   paint_lines(ui.render(base), 2, 4)
   paint_lines(ui.render(overlay), orow, ocol)
@@ -172,15 +178,16 @@ likewise paints nothing when it happens.
 """)]
 pub fn run_overlay[m, e](
   initial: m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   overlay: (m) -> Option[Ui] / e,
   tick_ms: Int
 ) : Result[Unit, String] / Ffi + e =
-  if not term.raw_enable() { Err(no_terminal()) }
-  else {
+  if not term.raw_enable() {
+    Err(no_terminal())
+  } else {
     term.write(term.hide_cursor())
-    term.write(term.clear())   # clean canvas on entry (see `run`)
+    term.write(term.clear())  # clean canvas on entry (see `run`)
     loop_overlay(initial, update, view, overlay, tick_ms)
     term.write(term.show_cursor())
     term.write(term.clear())
@@ -189,9 +196,9 @@ pub fn run_overlay[m, e](
   }
 
 fn loop_overlay[m, e](
-  model:   m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  model: m,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   overlay: (m) -> Option[Ui] / e,
   tick_ms: Int
 ) : Unit / Ffi + e = loop_overlay_framed(model, update, view, overlay, tick_ms, [], true)
@@ -202,14 +209,14 @@ fn loop_overlay[m, e](
 # can never alias); identical signature on a tick ⇒ no repaint, no
 # flicker. When it differs, we repaint via the same two-layer path.
 fn loop_overlay_framed[m, e](
-  model:   m,
-  update:  (m, term.Key) -> Step[m] / Ffi + e,
-  view:    (m) -> Ui / e,
+  model: m,
+  update: (m, term.Key) -> Step[m] / Ffi + e,
+  view: (m) -> Ui / e,
   overlay: (m) -> Option[Ui] / e,
   tick_ms: Int,
-  prev:    [String],
-  first:   Bool
-) : Unit / Ffi + e = {
+  prev: [String],
+  first: Bool
+) : Unit / Ffi + e {
   let base = view(model)
   let base_lines = ui.render(base)
   # `overlay` carries the user's effect row, so it is performed once
@@ -219,21 +226,23 @@ fn loop_overlay_framed[m, e](
   # boundary.
   let ov = overlay(model)
   let sig = match ov {
-    None      -> base_lines
+    None -> base_lines
     Some(ovl) -> [...base_lines, "#{int_to_char(1)}ovl", ...ui.render(ovl)]
   }
   let painted = if first or sig != prev {
     match ov {
-      None      -> paint(base)
+      None -> paint(base)
       Some(ovl) -> paint_with_overlay(base, ovl, 6, 16)
     }
     sig
-  } else { prev }
+  } else {
+    prev
+  }
   match term.poll_key(tick_ms) {
-    Eof -> ()                        # see loop_framed: EOF ends the loop
-    k   -> match update(model, k) {
-             Quit           -> ()
-             Continue(next) -> loop_overlay_framed(next, update, view, overlay, tick_ms, painted, false)
-           }
+    Eof -> ()  # see loop_framed: EOF ends the loop
+    k -> match update(model, k) {
+      Quit -> ()
+      Continue(next) -> loop_overlay_framed(next, update, view, overlay, tick_ms, painted, false)
+    }
   }
 }

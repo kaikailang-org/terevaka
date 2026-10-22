@@ -24,18 +24,18 @@ test "listbox — the viewport follows the cursor down" {
 
 test "listbox — the cursor wraps around the ends" {
   let l = listbox.init(["a", "b", "c"], 2)
-  assert listbox.selected_label(down_n(l, 3)) == "a"      # full cycle
+  assert listbox.selected_label(down_n(l, 3)) == "a"  # full cycle
   assert listbox.selected_label(listbox.update(l, Up)) == "c"
 }
 
 test "listbox — a window shorter than the list renders height+1 lines" {
   let l = listbox.init(["a", "b", "c", "d", "e"], 3)
-  assert list.length(ui.render(listbox.view(l))) == 4      # 3 rows + hint
+  assert list.length(ui.render(listbox.view(l))) == 4  # 3 rows + hint
 }
 
 test "listbox — a window longer than the list renders what exists" {
   let l = listbox.init(["a", "b"], 5)
-  assert list.length(ui.render(listbox.view(l))) == 3      # 2 rows + hint
+  assert list.length(ui.render(listbox.view(l))) == 3  # 2 rows + hint
 }
 
 test "listbox — an empty list renders just the hint" {

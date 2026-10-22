@@ -49,9 +49,9 @@ pub type Board = { columns: [Column], active: Int, width: Int, height: Int }
 pub fn kind_marker(k: CardKind) : String =
   match k {
     Feature -> "+"
-    Bug     -> "!"
-    Chore   -> "~"
-    Task    -> "."
+    Bug -> "!"
+    Chore -> "~"
+    Task -> "."
   }
 
 #[doc("Build a card.")]
@@ -75,8 +75,9 @@ pub fn init(columns: [Column], width: Int, height: Int) : Board =
 # ---- queries ----
 #[doc("The index of the active column.")]
 pub fn active_column(b: Board) : Int = b.active
+
 #[doc("The card under the cursor in the active column, or `None` if it is empty.")]
-pub fn selected_card(b: Board) : Option[Card] = {
+pub fn selected_card(b: Board) : Option[Card] {
   let col = nth_col(b.columns, b.active)
   list.nth(col.cards, col.cursor)
 }
@@ -90,12 +91,12 @@ app binds its own keys to — see `move_card_left` and friends.
 """)]
 pub fn update(b: Board, k: term.Key) : Board =
   match k {
-    Left         -> switch_col(b, -1)
-    Right        -> switch_col(b, 1)
-    Up           -> move_cursor(b, -1)
-    Down         -> move_cursor(b, 1)
+    Left -> switch_col(b, -1)
+    Right -> switch_col(b, 1)
+    Up -> move_cursor(b, -1)
+    Down -> move_cursor(b, 1)
     Printable(c) -> nav_char(b, c)
-    _            -> b
+    _ -> b
   }
 
 fn nav_char(b: Board, c: Char) : Board = match c {
@@ -103,13 +104,13 @@ fn nav_char(b: Board, c: Char) : Board = match c {
   'l' -> switch_col(b, 1)
   'k' -> move_cursor(b, -1)
   'j' -> move_cursor(b, 1)
-  _   -> b
+  _ -> b
 }
 
 fn switch_col(b: Board, d: Int) : Board =
   Board { ...b, active: nav.wrap(b.active + d, list.length(b.columns)) }
 
-fn move_cursor(b: Board, d: Int) : Board = {
+fn move_cursor(b: Board, d: Int) : Board {
   let col = nth_col(b.columns, b.active)
   let n = list.length(col.cards)
   let cur = if n == 0 { 0 } else { nav.wrap(col.cursor + d, n) }
@@ -121,25 +122,30 @@ fn move_cursor(b: Board, d: Int) : Board = {
 # top of the neighbour column; the cursor follows it.
 #[doc("Move the selected card to the next column, top of the stack. The cursor follows it.")]
 pub fn move_card_right(b: Board) : Board = move_card(b, 1)
+
 #[doc("Move the selected card to the previous column, top of the stack. The cursor follows it.")]
 pub fn move_card_left(b: Board) : Board = move_card(b, -1)
 
-fn move_card(b: Board, d: Int) : Board = {
+fn move_card(b: Board, d: Int) : Board {
   let src_i = b.active
   let dst_i = nav.wrap(b.active + d, list.length(b.columns))
-  if src_i == dst_i { b } else {
+  if src_i == dst_i {
+    b
+  } else {
     let src = nth_col(b.columns, src_i)
     match list.nth(src.cards, src.cursor) {
-      None    -> b
+      None -> b
       Some(c) -> {
-        let src2 = Column { ...src,
-                            cards: remove_at(src.cards, src.cursor),
-                            cursor: clamp_cursor(src.cursor, list.length(src.cards) - 1) }
+        let src2 = Column {
+          ...src,
+          cards: remove_at(src.cards, src.cursor),
+          cursor: clamp_cursor(src.cursor, list.length(src.cards) - 1)
+        }
         let dst = nth_col(b.columns, dst_i)
         let dst2 = Column { ...dst, cards: [c, ...dst.cards], cursor: 0 }
         let b1 = set_col(b, src_i, src2)
         let b2 = set_col(b1, dst_i, dst2)
-        Board { ...b2, active: dst_i }   # follow the card
+        Board { ...b2, active: dst_i }  # follow the card
       }
     }
   }
@@ -148,14 +154,17 @@ fn move_card(b: Board, d: Int) : Board = {
 # ---- REORDERING within the active column ----
 #[doc("Swap the selected card with the one above it. A no-op at the top.")]
 pub fn move_card_up(b: Board) : Board = reorder(b, -1)
+
 #[doc("Swap the selected card with the one below it. A no-op at the bottom.")]
 pub fn move_card_down(b: Board) : Board = reorder(b, 1)
 
-fn reorder(b: Board, d: Int) : Board = {
+fn reorder(b: Board, d: Int) : Board {
   let col = nth_col(b.columns, b.active)
   let i = col.cursor
   let j = i + d
-  if j < 0 or j >= list.length(col.cards) { b } else {
+  if j < 0 or j >= list.length(col.cards) {
+    b
+  } else {
     let swapped = swap_at(col.cards, i, j)
     set_col(b, b.active, Column { ...col, cards: swapped, cursor: j })
   }
@@ -168,19 +177,24 @@ Append a card to the active column and put the cursor on it.
 The caller supplies the ref, since ref schemes are the app's business;
 the kind defaults to `Task`.
 """)]
-pub fn add_card(b: Board, ref: String, title: String) : Board = {
+pub fn add_card(b: Board, ref: String, title: String) : Board {
   let col = nth_col(b.columns, b.active)
   let cards = col.cards ++ [Card { ref: ref, kind: Task, title: title }]
   set_col(b, b.active, Column { ...col, cards: cards, cursor: list.length(col.cards) })
 }
 
 #[doc("Drop the selected card, clamping the cursor. A no-op on an empty column.")]
-pub fn remove_selected(b: Board) : Board = {
+pub fn remove_selected(b: Board) : Board {
   let col = nth_col(b.columns, b.active)
-  if list.length(col.cards) == 0 { b } else {
+  if list.length(col.cards) == 0 {
+    b
+  } else {
     let cards = remove_at(col.cards, col.cursor)
-    set_col(b, b.active, Column { ...col, cards: cards,
-                                  cursor: clamp_cursor(col.cursor, list.length(cards) - 1) })
+    set_col(b, b.active, Column {
+      ...col,
+      cards: cards,
+      cursor: clamp_cursor(col.cursor, list.length(cards) - 1)
+    })
   }
 }
 
@@ -191,15 +205,18 @@ pub fn view(b: Board) : Ui =
 fn col_panels(cols: [Column], active: Int, w: Int, h: Int) : [Ui] =
   list.map_indexed(cols, (i, c) => col_panel(c, i == active, w, h))
 
-fn col_panel(c: Column, is_active: Bool, w: Int, h: Int) : Ui = {
-  let ttl   = "#{c.title} (#{list.length(c.cards)})"
+fn col_panel(c: Column, is_active: Bool, w: Int, h: Int) : Ui {
+  let ttl = "#{c.title} (#{list.length(c.cards)})"
   let color = if is_active { 44 } else { c.color }
   ui.box_filled(color, w, h, ttl, card_list(c.cards, c.cursor, is_active, w))
 }
 
 fn card_list(cards: [Card], cursor: Int, active_col: Bool, w: Int) : Ui =
-  if list.is_empty(cards) { ui.muted("(empty)") }
-  else { ui.col(card_rows(cards, cursor, active_col, w)) }
+  if list.is_empty(cards) {
+    ui.muted("(empty)")
+  } else {
+    ui.col(card_rows(cards, cursor, active_col, w))
+  }
 
 # each card contributes two lines, so the per-card blocks are
 # concatenated rather than mapped one-to-one.
@@ -208,16 +225,16 @@ fn card_rows(cards: [Card], cursor: Int, active_col: Bool, w: Int) : [Ui] =
 
 # each card = 2 lines: "[REF] <marker>" then the title, truncated to
 # the box's inner content width (w - 4: two border + two padding cols).
-fn card_lines(c: Card, on_cursor: Bool, active_col: Bool, w: Int) : [Ui] = {
-  let sel  = on_cursor and active_col
+fn card_lines(c: Card, on_cursor: Bool, active_col: Bool, w: Int) : [Ui] {
+  let sel = on_cursor and active_col
   # `head` is a colored String (term.fg returns String); wrapping it in
   # ui.text keeps it one Ui line. (ui.label returns Ui, which cannot be
   # ++-concatenated with the String marker — that is the concat-mismatch.)
   let head = term.fg(44, "[#{c.ref}]") ++ " " ++ kind_marker(c.kind)
-  let txt  = ui.cell(c.title, w - 4)
+  let txt = ui.cell(c.title, w - 4)
   let title = match (sel, on_cursor) {
-    (true, _)      -> Text(Selected(44), txt)   # selected wins over cursor
-    (false, true)  -> ui.label(245, txt)
+    (true, _) -> Text(Selected(44), txt)  # selected wins over cursor
+    (false, true) -> ui.label(245, txt)
     (false, false) -> Text(Dim, txt)
   }
   [ui.text(head), title]
@@ -226,7 +243,7 @@ fn card_lines(c: Card, on_cursor: Bool, active_col: Bool, w: Int) : [Ui] = {
 # ---- pure list helpers ----
 fn remove_at(xs: [a], idx: Int) : [a] =
   match xs {
-    []           -> []
+    [] -> []
     [x, ...rest] -> if idx == 0 { rest } else { [x, ...remove_at(rest, idx - 1)] }
   }
 
@@ -236,7 +253,7 @@ fn remove_at(xs: [a], idx: Int) : [a] =
 # We only ever call this with adjacent indices (reorder up/down), so a
 # simple adjacent-swap covers every real call; general i/j falls back
 # to identity if non-adjacent.
-fn swap_at(xs: [Card], i: Int, j: Int) : [Card] = {
+fn swap_at(xs: [Card], i: Int, j: Int) : [Card] {
   let lo = if i < j { i } else { j }
   let hi = if i < j { j } else { i }
   if hi - lo == 1 { adj_swap(xs, lo, 0) } else { xs }
@@ -245,18 +262,22 @@ fn swap_at(xs: [Card], i: Int, j: Int) : [Card] = {
 # swap positions `at` and `at+1`
 fn adj_swap(xs: [Card], at: Int, k: Int) : [Card] =
   match xs {
-    []          -> []
-    [x]         -> [x]
+    [] -> []
+    [x] -> [x]
     [a, b, ...rest] ->
-      if k == at { [b, a, ...rest] }
-      else { [a, ...adj_swap([b, ...rest], at, k + 1)] }
+      if k == at {
+        [b, a, ...rest]
+      } else {
+        [a, ...adj_swap([b, ...rest], at, k + 1)]
+      }
   }
 
-fn clamp_cursor(cur: Int, max: Int) : Int = if cur > max { if max < 0 { 0 } else { max } } else { cur }
+fn clamp_cursor(cur: Int, max: Int) : Int =
+  if cur > max { if max < 0 { 0 } else { max } } else { cur }
 
 fn nth_col(cols: [Column], i: Int) : Column =
   match cols {
-    []           -> Column { title: "", color: 240, cards: [], cursor: 0 }   # unreachable in practice; keeps the match total
+    [] -> Column { title: "", color: 240, cards: [], cursor: 0 }  # unreachable in practice; keeps the match total
     [c, ...rest] -> if i == 0 { c } else { nth_col(rest, i - 1) }
   }
 
@@ -265,6 +286,6 @@ fn set_col(b: Board, i: Int, col: Column) : Board =
 
 fn replace_at(cols: [Column], i: Int, v: Column) : [Column] =
   match cols {
-    []           -> []
+    [] -> []
     [c, ...rest] -> if i == 0 { [v, ...rest] } else { [c, ...replace_at(rest, i - 1, v)] }
   }

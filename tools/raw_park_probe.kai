@@ -5,7 +5,9 @@ import spawn
 import time
 
 fn ticker(n: Int, acc: Int) : Int / Clock + Ffi =
-  if n <= 0 { acc } else {
+  if n <= 0 {
+    acc
+  } else {
     time.sleep(time.millis(100))
     term.write("tick #{acc}\r\n")
     ticker(n - 1, acc + 1)
@@ -13,7 +15,7 @@ fn ticker(n: Int, acc: Int) : Int / Clock + Ffi =
 
 fn reader() : String / Stdin = Stdin.read_bytes(1)
 
-fn main() : Int / Ffi + Spawn + Clock + Stdin = {
+fn main() : Int / Ffi + Spawn + Clock + Stdin {
   let _ = term.raw_enable()
   term.write("raw mode on\r\n")
   let r = spawn.spawn(reader)

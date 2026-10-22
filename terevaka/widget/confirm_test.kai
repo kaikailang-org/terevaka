@@ -6,8 +6,8 @@ import terevaka.widget.confirm
 import terevaka.term
 
 fn answer(a: confirm.Answer) : String = match a {
-  Yes        -> "yes"
-  No         -> "no"
+  Yes -> "yes"
+  No -> "no"
   Pending(c) -> if c.on_yes { "pending:yes" } else { "pending:no" }
 }
 
@@ -25,7 +25,7 @@ test "confirm — Enter answers with the highlighted button" {
 
   let on_no = match confirm.update(c, Right) {
     Pending(next) -> next
-    _             -> c
+    _ -> c
   }
   assert answer(confirm.update(on_no, Enter)) == "no"
 }

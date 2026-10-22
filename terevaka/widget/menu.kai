@@ -32,31 +32,30 @@ pub fn selected(m: Menu) : Int = m.cursor
 #[doc("Move the cursor with Up/Down or k/j, wrapping at both ends. Other keys are no-ops.")]
 pub fn update(m: Menu, k: term.Key) : Menu =
   match k {
-    Up           -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
-    Down         -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
+    Up -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
+    Down -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
     Printable(c) -> match c {
-                      'k' -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
-                      'j' -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
-                      _   -> m
-                    }
-    _            -> m
+      'k' -> with_cursor(m, nav.wrap(m.cursor - 1, count(m)))
+      'j' -> with_cursor(m, nav.wrap(m.cursor + 1, count(m)))
+      _ -> m
+    }
+    _ -> m
   }
 
 fn with_cursor(m: Menu, c: Int) : Menu = Menu { ...m, cursor: c }
 
 #[doc("Render one row per item, the selected one carrying the highlight bar.")]
-pub fn view(m: Menu) : Ui = {
+pub fn view(m: Menu) : Ui {
   let w = item_width(m.items)
   ui.col(list.map_indexed(m.items, (i, x) => item_row(x, i == m.cursor, w)))
 }
 
 fn item_row(lbl: String, sel: Bool, w: Int) : Ui =
   if sel {
-    ui.row([ ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ") ])
+    ui.row([ui.label(220, "▸"), Text(Selected(44), " " ++ ui.fit(lbl, w) ++ " ")])
   } else {
-    ui.row([ ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ") ])
+    ui.row([ui.text(" "), Text(Dim, " " ++ ui.fit(lbl, w) ++ " ")])
   }
 
 # widest item, for a uniform highlight bar (0 when there are none)
-fn item_width(items: [String]) : Int =
-  list.max(items | ui.visible_len(.)) ?? 0
+fn item_width(items: [String]) : Int = list.max(items | ui.visible_len(.)) ?? 0

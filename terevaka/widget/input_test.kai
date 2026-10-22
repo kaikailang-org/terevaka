@@ -5,17 +5,17 @@ import terevaka.widget.input
 import terevaka.term
 
 fn typed(i: input.Input, s: [Char]) : input.Input = match s {
-  []           -> i
+  [] -> i
   [c, ...rest] -> match input.update(i, Printable(c)) {
-                    Editing(next) -> typed(next, rest)
-                    _             -> i
-                  }
+    Editing(next) -> typed(next, rest)
+    _ -> i
+  }
 }
 
 fn text_of(o: input.Outcome) : String = match o {
   Editing(i) -> input.value(i)
-  Done(s)    -> s
-  Cancelled  -> "(cancelled)"
+  Done(s) -> s
+  Cancelled -> "(cancelled)"
 }
 
 test "input — typing appends and backspace removes" {

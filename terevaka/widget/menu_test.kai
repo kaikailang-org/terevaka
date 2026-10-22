@@ -14,7 +14,7 @@ test "menu — cursor wraps in both directions" {
 
   # k/j mirror Up/Down
   assert menu.selected(menu.update(m, Printable('j'))) == 1
-  assert menu.selected(menu.update(m, Printable('k'))) == 2   # wraps to last
+  assert menu.selected(menu.update(m, Printable('k'))) == 2  # wraps to last
 
   # a full cycle returns to the start
   assert menu.selected(menu.update(menu.update(menu.update(m, Down), Down), Down)) == 0

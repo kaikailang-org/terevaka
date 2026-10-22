@@ -14,10 +14,15 @@
 
 # ---- FFI to the shim ----
 extern "C" fn kai_tvk_raw_enable() : Int / Ffi
+
 extern "C" fn kai_tvk_raw_disable() : Int / Ffi
+
 extern "C" fn kai_tvk_poll_key(timeout_ms: Int) : Int / Ffi
+
 extern "C" fn kai_tvk_write(s: String) : Int / Ffi
+
 extern "C" fn kai_tvk_term_rows() : Int / Ffi
+
 extern "C" fn kai_tvk_term_cols() : Int / Ffi
 
 # ---- Lifecycle ----
@@ -35,7 +40,10 @@ nothing when there was nothing to save.
 pub fn raw_enable() : Bool / Ffi = kai_tvk_raw_enable() == 0
 
 #[doc("Restore the terminal settings saved by `raw_enable`.")]
-pub fn raw_disable() : Unit / Ffi = { let _ = kai_tvk_raw_disable(); () }
+pub fn raw_disable() : Unit / Ffi {
+  let _ = kai_tvk_raw_disable()
+  ()
+}
 
 #[doc("The terminal height in rows, from the shim's window-size query.")]
 pub fn rows() : Int / Ffi = kai_tvk_term_rows()
@@ -55,9 +63,15 @@ a loop that treats it as an unrecognised key spins at full speed with
 no way out. `Unknown` is the recoverable case — a sequence this layer
 does not decode, or a read error — and is safe to ignore.
 """)]
-pub type Key =
-  Up | Down | Left | Right
-  | Enter | Backspace | Esc | Tab
+pub type Key
+  = Up
+  | Down
+  | Left
+  | Right
+  | Enter
+  | Backspace
+  | Esc
+  | Tab
   | Printable(Char)
   | Tick
   | Eof
@@ -73,17 +87,17 @@ Arrow keys arrive as the 3-byte ESC '[' 'A'..'D' sequence and are
 assembled here, so a caller sees `Up` rather than three bytes.
 """)]
 pub fn poll_key(ms: Int) : Key / Ffi = match kai_tvk_poll_key(ms) {
-  -1  -> Tick
-  -2  -> Eof
-  27  -> escape_seq()
-  13  -> Enter
-  10  -> Enter
-  9   -> Tab
+  -1 -> Tick
+  -2 -> Eof
+  27 -> escape_seq()
+  13 -> Enter
+  10 -> Enter
+  9 -> Tab
   127 -> Backspace
-  8   -> Backspace
-  b if b < 0   -> Unknown          # -3: read error, recoverable
+  8 -> Backspace
+  b if b < 0 -> Unknown  # -3: read error, recoverable
   b if b >= 32 -> Printable(int_to_char(b))
-  _   -> Unknown
+  _ -> Unknown
 }
 
 # ESC arrived: it either opens an arrow sequence ('[' then 'A'..'D')
@@ -96,9 +110,11 @@ fn escape_seq() : Key / Ffi =
       66 -> Down
       67 -> Right
       68 -> Left
-      _  -> Unknown
+      _ -> Unknown
     }
-  } else { Esc }
+  } else {
+    Esc
+  }
 
 # ---- Raw output ----
 #[doc("""
@@ -107,7 +123,10 @@ Write `s` to the terminal with no trailing newline.
 The no-newline part is the point: a TUI positions text with `goto`,
 and a stray newline would scroll the screen out from under the frame.
 """)]
-pub fn write(s: String) : Unit / Ffi = { let _ = kai_tvk_write(s); () }
+pub fn write(s: String) : Unit / Ffi {
+  let _ = kai_tvk_write(s)
+  ()
+}
 
 # ---- ANSI escape builders (pure String functions; no Ffi) ----
 #[doc("The ESC character (byte 27) that opens every ANSI sequence.")]
@@ -170,13 +189,14 @@ every string and swallow the whole reply.
 """)]
 pub fn reply_body(raw: String, terminators: [String]) : Option[String] =
   match terminators {
-    []           -> None
+    [] -> None
     [t, ...rest] ->
-      if t == "" { reply_body(raw, rest) }
-      else {
+      if t == "" {
+        reply_body(raw, rest)
+      } else {
         match string.drop_suffix(raw, t) {
           Some(body) -> Some(body)
-          None       -> reply_body(raw, rest)
+          None -> reply_body(raw, rest)
         }
       }
   }
@@ -216,8 +236,9 @@ let supported = term.probe(
 pub fn probe(request: String, terminators: [String], first_ms: Int) : Option[String] / Ffi =
   # A failed enable means stdin is not a terminal, so nothing can
   # answer; the terminal is untouched and there is nothing to restore.
-  if kai_tvk_raw_enable() != 0 { None }
-  else {
+  if kai_tvk_raw_enable() != 0 {
+    None
+  } else {
     let _ = kai_tvk_write(request)
     let answer = read_reply(terminators, first_ms, [])
     let _ = kai_tvk_raw_disable()
@@ -228,25 +249,29 @@ pub fn probe(request: String, terminators: [String], first_ms: Int) : Option[Str
 # waits `ms` for the round trip; the rest arrive together, so they wait
 # the same short beat `escape_seq` gives a pending arrow sequence.
 fn read_reply(terminators: [String], ms: Int, acc_rev: [Byte]) : Option[String] / Ffi =
-  if list.length(acc_rev) >= reply_cap() { None }
-  else { next_byte(ms) || (b => reply_or_read(terminators, [b, ...acc_rev])) }
+  if list.length(acc_rev) >= reply_cap() {
+    None
+  } else {
+    next_byte(ms) || (b => reply_or_read(terminators, [b, ...acc_rev]))
+  }
 
 # The body once the bytes so far end in a terminator, else read on.
 fn reply_or_read(terminators: [String], acc_rev: [Byte]) : Option[String] / Ffi =
   match reply_body(string.from_bytes(list.reverse(acc_rev)), terminators) {
     Some(body) -> Some(body)
-    None       -> read_reply(terminators, follow_ms(), acc_rev)
+    None -> read_reply(terminators, follow_ms(), acc_rev)
   }
 
 # The next byte within `ms`. A timeout, end of input or a read error
 # all mean the same here: no answer is coming.
-fn next_byte(ms: Int) : Option[Byte] / Ffi = {
+fn next_byte(ms: Int) : Option[Byte] / Ffi {
   let code = kai_tvk_poll_key(ms)
-  if code < 0 { None }
-  else {
+  if code < 0 {
+    None
+  } else {
     match int_to_byte(code) {
       Ok(byte) -> Some(byte)
-      Err(_)   -> None
+      Err(_) -> None
     }
   }
 }

@@ -15,7 +15,7 @@ on an empty list leaves it at -1, an index no lookup can satisfy.
 """)]
 pub fn wrap(i: Int, n: Int) : Int = match i {
   _ if n <= 0 -> 0
-  x if x < 0  -> n - 1
+  x if x < 0 -> n - 1
   x if x >= n -> 0
-  x           -> x
+  x -> x
 }

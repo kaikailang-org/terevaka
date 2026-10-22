@@ -14,15 +14,15 @@ import core.string
 fn at(secs: Int) : String = handle {
   clock.hhmmss_utc()
 } with Clock {
-  wall_now(resume)      -> resume(time.WallTime { secs: secs, nanos: 0 })
+  wall_now(resume) -> resume(time.WallTime { secs: secs, nanos: 0 })
   monotonic_now(resume) -> resume(time.instant_of_nanos(0))
-  sleep_ns(ns, resume)  -> resume(())
+  sleep_ns(ns, resume) -> resume(())
 }
 
 test "clock — formats the UTC time of day" {
-  assert at(0) == "00:00:00 UTC"                 # the epoch itself
-  assert at(3661) == "01:01:01 UTC"              # 1h 1m 1s in
-  assert at(86399) == "23:59:59 UTC"             # last second of the day
+  assert at(0) == "00:00:00 UTC"  # the epoch itself
+  assert at(3661) == "01:01:01 UTC"  # 1h 1m 1s in
+  assert at(86399) == "23:59:59 UTC"  # last second of the day
 }
 
 test "clock — only the time of day survives, not the date" {
@@ -32,7 +32,7 @@ test "clock — only the time of day survives, not the date" {
 }
 
 test "clock — every field keeps two digits" {
-  let s = at(5)                                   # 00:00:05, not 0:0:5
+  let s = at(5)  # 00:00:05, not 0:0:5
   assert s == "00:00:05 UTC"
   assert string.length(s) == 12
 }

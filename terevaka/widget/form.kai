@@ -27,13 +27,13 @@ pub fn toggle(c: Checkbox) : Checkbox =
 pub fn checkbox_update(c: Checkbox, k: term.Key) : Checkbox =
   match k {
     Printable(ch) -> if ch == ' ' { toggle(c) } else { c }
-    _             -> c
+    _ -> c
   }
 
 #[doc("Render as `[x] label`, the label highlighted when focused.")]
-pub fn checkbox_view(c: Checkbox, focused: Bool) : Ui = {
+pub fn checkbox_view(c: Checkbox, focused: Bool) : Ui {
   let mark = if c.checked { term.fg(83, "[x]") } else { term.fg(245, "[ ]") }
-  let lbl  = if focused { term.fg(220, c.label) } else { c.label }
+  let lbl = if focused { term.fg(220, c.label) } else { c.label }
   ui.text(mark ++ " " ++ lbl)
 }
 
@@ -53,26 +53,28 @@ pub fn radio(options: [String]) : Radio =
 
 #[doc("The index of the selected option.")]
 pub fn radio_chosen(r: Radio) : Int = r.chosen
+
 #[doc("The label of the selected option, or the empty string when there are none.")]
 pub fn radio_chosen_label(r: Radio) : String = list.nth(r.options, r.chosen) ?? ""
 
 #[doc("Up/Down or k/j move the highlight; Space or Enter select what it is on.")]
 pub fn radio_update(r: Radio, k: term.Key) : Radio =
   match k {
-    Up           -> move_cursor(r, -1)
-    Down         -> move_cursor(r, 1)
+    Up -> move_cursor(r, -1)
+    Down -> move_cursor(r, 1)
     Printable(c) -> match c {
-                      'k' -> move_cursor(r, -1)
-                      'j' -> move_cursor(r, 1)
-                      ' ' -> choose(r)
-                      _   -> r
-                    }
-    Enter        -> choose(r)
-    _            -> r
+      'k' -> move_cursor(r, -1)
+      'j' -> move_cursor(r, 1)
+      ' ' -> choose(r)
+      _ -> r
+    }
+    Enter -> choose(r)
+    _ -> r
   }
 
 fn move_cursor(r: Radio, d: Int) : Radio =
   Radio { ...r, cursor: nav.wrap(r.cursor + d, list.length(r.options)) }
+
 fn choose(r: Radio) : Radio =
   Radio { ...r, chosen: r.cursor }
 
@@ -83,7 +85,7 @@ pub fn radio_view(r: Radio, focused: Bool) : Ui =
 fn radio_rows(opts: [String], cursor: Int, chosen: Int, focused: Bool) : [Ui] =
   list.map_indexed(opts, (i, o) => radio_row(o, i == cursor, i == chosen, focused))
 
-fn radio_row(lbl: String, on_cursor: Bool, is_chosen: Bool, focused: Bool) : Ui = {
+fn radio_row(lbl: String, on_cursor: Bool, is_chosen: Bool, focused: Bool) : Ui {
   let dot = if is_chosen { term.fg(83, "(o)") } else { term.fg(245, "( )") }
   let txt = if on_cursor and focused { term.fg(220, lbl) } else { lbl }
   ui.text(dot ++ " " ++ txt)
@@ -107,9 +109,9 @@ why this takes only the key.
 """)]
 pub fn button_pressed(k: term.Key) : Bool =
   match k {
-    Enter        -> true
+    Enter -> true
     Printable(c) -> c == ' '
-    _            -> false
+    _ -> false
   }
 
 #[doc("Render as `[ label ]`, filled when focused.")]
