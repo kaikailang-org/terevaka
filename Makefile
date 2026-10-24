@@ -18,7 +18,7 @@ TVK_SRC := $(wildcard terevaka/*.kai) $(wildcard terevaka/widget/*.kai)
 
 SHIM_SRC := c/terevaka_term.c c/terevaka_term.h
 
-.PHONY: all example gallery kanban run run-gallery run-kanban test test-notty test-probe clean
+.PHONY: all example gallery kanban run run-gallery run-kanban test test-notty test-probe test-loop clean
 
 all: example gallery kanban
 
@@ -55,7 +55,7 @@ run-kanban: kanban
 # names each module as it runs, which is what CI reports against.
 TEST_SRC := $(wildcard terevaka/*_test.kai) $(wildcard terevaka/widget/*_test.kai)
 
-test: test-notty test-probe
+test: test-notty test-probe test-loop
 	@set -e; for t in $(TEST_SRC); do \
 	  echo "== $$t"; \
 	  $(KAI_BIN) test $$t; \
@@ -109,6 +109,26 @@ test-probe: $(BUILD)/term_probe_check
 	  echo "== probe: answered, silent and oversized replies all handled, raw mode restored ($$py)"; \
 	else \
 	  echo "== probe: SKIPPED (no interpreter with 'pty'; set PYTHON=/path/to/python3)"; \
+	fi
+
+# The app loop under a real pty: key decoding, one paint per distinct
+# frame, the entry and exit sequences, and the end of the loop when the
+# terminal hangs up. Same driver arrangement and skip rule as test-probe.
+$(BUILD)/app_loop_check: tools/app_loop_check.kai $(TVK_SRC) $(SHIM_SRC) | $(BUILD)
+	$(KAI_BIN) build tools/app_loop_check.kai -o $@
+
+test-loop: $(BUILD)/app_loop_check
+	@py=""; \
+	for cand in $(PYTHON) /usr/bin/python3; do \
+	  if $$cand -c 'import pty' >/dev/null 2>&1; then py=$$cand; break; fi; \
+	done; \
+	if [ -n "$$py" ]; then \
+	  $$py tools/app_loop_check.py $(BUILD)/app_loop_check plain   && \
+	  $$py tools/app_loop_check.py $(BUILD)/app_loop_check overlay && \
+	  $$py tools/app_loop_check.py $(BUILD)/app_loop_check eof     && \
+	  echo "== loop: keys decoded, frames painted once each, hangup ends both loops ($$py)"; \
+	else \
+	  echo "== loop: SKIPPED (no interpreter with 'pty'; set PYTHON=/path/to/python3)"; \
 	fi
 
 clean:

@@ -7,6 +7,8 @@
 # What covers the loop instead:
 #   - `test-notty` in the Makefile, for the refusal when there is no
 #     terminal to drive;
+#   - `test-loop`, which drives both loops under a pty and checks key
+#     decoding, every byte painted, and the end on a hangup;
 #   - the examples, which are built on every `make`.
 
 import terevaka.app
