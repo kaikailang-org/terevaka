@@ -104,7 +104,9 @@ test-probe: $(BUILD)/term_probe_check
 	if [ -n "$$py" ]; then \
 	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check answer >/dev/null && \
 	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check silent  >/dev/null && \
-	  echo "== probe: answered and silent terminals both handled, raw mode restored ($$py)"; \
+	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check cap     >/dev/null && \
+	  $$py tools/term_probe_check.py $(BUILD)/term_probe_check over    >/dev/null && \
+	  echo "== probe: answered, silent and oversized replies all handled, raw mode restored ($$py)"; \
 	else \
 	  echo "== probe: SKIPPED (no interpreter with 'pty'; set PYTHON=/path/to/python3)"; \
 	fi
