@@ -27,6 +27,7 @@
 import terevaka.ui
 import terevaka.term
 import terevaka.nav
+import math.int
 
 #[doc("""
 A card's type, which drives its one-char marker.
@@ -112,8 +113,7 @@ fn switch_col(b: Board, d: Int) : Board =
 
 fn move_cursor(b: Board, d: Int) : Board {
   let col = nth_col(b.columns, b.active)
-  let n = list.length(col.cards)
-  let cur = if n == 0 { 0 } else { nav.wrap(col.cursor + d, n) }
+  let cur = nav.wrap(col.cursor + d, list.length(col.cards))
   set_col(b, b.active, Column { ...col, cursor: cur })
 }
 
@@ -270,8 +270,8 @@ fn adj_swap(xs: [Card], at: Int, k: Int) : [Card] =
       }
   }
 
-fn clamp_cursor(cur: Int, max: Int) : Int =
-  if cur > max { if max < 0 { 0 } else { max } } else { cur }
+# `max` is -1 for a column left empty, whose cursor stays at 0.
+fn clamp_cursor(cur: Int, max: Int) : Int = if cur > max { int.max(max, 0) } else { cur }
 
 fn nth_col(cols: [Column], i: Int) : Column =
   match cols {
