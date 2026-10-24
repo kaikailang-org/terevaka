@@ -1,0 +1,63 @@
+# Does the app loop decode keys, paint each distinct frame exactly once,
+# and end on end of input? All of it needs a real tty, so this runs
+# under the pty driver beside it rather than as a `kai test` case.
+#
+#   app_loop_check plain     drives app.run
+#   app_loop_check overlay   drives app.run_overlay; `o` toggles the modal
+#
+# The view is plain text, so the driver can rebuild every byte the
+# runtime should write and compare the whole stream. It renders nothing
+# until a key arrives, which pins the initial paint of an empty frame.
+import terevaka.app
+import terevaka.term
+import terevaka.ui
+
+type Model = { log: [String], modal: Bool }
+
+fn name(k: term.Key) : String = match k {
+  Up -> "Up"
+  Down -> "Down"
+  Left -> "Left"
+  Right -> "Right"
+  Enter -> "Enter"
+  Backspace -> "Backspace"
+  Esc -> "Esc"
+  Tab -> "Tab"
+  Printable(c) -> "P#{char_to_int(c)}"
+  Tick -> "Tick"
+  Eof -> "Eof"
+  Unknown -> "Unknown"
+}
+
+# Tick and Eof leave the model alone: an idle tick must not repaint, and
+# end of input is the runtime's to act on, not the app's.
+fn update(m: Model, k: term.Key) : app.Step[Model] / Ffi = match k {
+  Tick -> app.keep(m)
+  Eof -> app.keep(m)
+  Printable('q') -> app.quit()
+  Printable('o') -> app.keep(Model { log: [...m.log, name(k)], modal: not m.modal })
+  _ -> app.keep(Model { ...m, log: [...m.log, name(k)] })
+}
+
+fn view(m: Model) : Ui = match m.log {
+  [] -> ui.col([])
+  log -> ui.col([ui.text("keys #{list.length(log)}"), ui.text(string.join(log, " "))])
+}
+
+fn overlay(m: Model) : Option[Ui] =
+  if m.modal { Some(ui.text("modal #{list.length(m.log)}")) } else { None }
+
+fn main() : Int / Ffi + Env {
+  let start = Model { log: [], modal: false }
+  let outcome = match Env.args() {
+    ["overlay"] -> app.run_overlay(start, update, view, overlay, 30)
+    _ -> app.run(start, update, view, 30)
+  }
+  match outcome {
+    Ok(_) -> 0
+    Err(msg) -> {
+      term.write(msg ++ "\n")
+      1
+    }
+  }
+}

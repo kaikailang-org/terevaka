@@ -79,3 +79,28 @@ when the shim changes, since it is the one users hit by accident:
 ```sh
 ./build/term_probe_check < /dev/null   # "no answer", immediately, no query sent
 ```
+
+## `app_loop_check` — the loop behind `app.run`
+
+`run` and `run_overlay` own the terminal, so their loop can only be
+exercised from the other end of a pty. The driver plays the terminal
+and compares every byte the runtime writes with the stream it should
+write:
+
+1. `plain` sends each key `poll_key` decodes — arrows, a lone Esc, CR
+   and LF, Tab, both Backspaces, the first printable byte, control
+   bytes and an undecoded sequence — with idle gaps between them. The
+   app logs each key it is given, so a misdecoded byte shows up in the
+   frame, and an idle tick that repaints shows up as a frame written
+   twice.
+2. `overlay` does the same through `run_overlay`, toggling the modal
+   so both of its paint paths run.
+3. `eof` hangs the terminal up after entry and expects each loop to end
+   and the program to exit 0, rather than spin on a dead descriptor.
+
+```sh
+make test-loop                         # runs all three, or says why it skipped
+```
+
+Wired into `make test`, with the same interpreter fallback and skip
+rule as `term_probe_check`.
