@@ -3,6 +3,7 @@
 # can express them) and the ones that do the most index arithmetic.
 
 import terevaka.widget.board
+import terevaka.ui
 import terevaka.term
 
 fn fixture() : board.Board = board.init(
@@ -113,4 +114,73 @@ test "board — reordering moves the card one place and the cursor with it" {
   let down = board.move_card_down(mid)  # A-1, A-3, A-2
   assert ref_of(board.selected_card(down)) == "A-2"
   assert ref_of(board.selected_card(board.update(down, Up))) == "A-3"
+}
+
+test "board — h l k j mirror the arrows" {
+  let b = fixture()
+  assert board.active_column(board.update(b, Printable('l'))) == 1
+  assert board.active_column(board.update(b, Printable('h'))) == 1  # wraps to last
+  assert board.active_column(board.update(board.update(b, Printable('l')), Printable('h'))) == 0
+  assert ref_of(board.selected_card(board.update(b, Printable('j')))) == "A-2"
+  assert ref_of(board.selected_card(board.update(b, Printable('k')))) == "A-2"  # wraps
+  let three = board.update(board.add_card(fixture(), "A-3", "three"), Printable('k'))
+  assert ref_of(board.selected_card(three)) == "A-2"
+  assert ref_of(board.selected_card(board.update(b, Printable('x')))) == "A-1"
+}
+
+test "board — moving a card left lands it on top of the previous column" {
+  let b = board.update(fixture(), Right)  # on B-1
+  let moved = board.move_card_left(b)
+  assert board.active_column(moved) == 0
+  assert ref_of(board.selected_card(moved)) == "B-1"
+  assert ref_of(board.selected_card(board.update(moved, Down))) == "A-1"
+}
+
+fn cursor_at(b: board.Board, i: Int) : Int = match list.nth(b.columns, i) {
+  Some(c) -> c.cursor
+  None -> -1
+}
+
+# An empty column has no card to point at; its cursor stays at 0 rather
+# than on an index past the end.
+test "board — an empty column keeps its cursor at 0" {
+  let b = board.init(
+    [board.column("todo", 75, [board.card("A-1", Task, "one")]), board.column("done", 83, [])],
+    20,
+    0
+  )
+  assert cursor_at(board.update(board.update(b, Right), Down), 1) == 0
+  assert cursor_at(board.update(board.update(b, Right), Up), 1) == 0
+  assert cursor_at(board.remove_selected(b), 0) == 0
+  assert cursor_at(board.move_card_right(b), 0) == 0
+}
+
+fn has_line(lines: [String], s: String) : Bool =
+  list.any(lines, l => string.index_of(l, s) != None)
+
+# Column 0 active with its cursor on A-1; column 1 inactive, cursor on
+# B-1; column 2 empty.
+test "board — the view colours the active column, the selection and the cursor" {
+  let b = board.init(
+    [
+      board.column("todo", 75, [board.card("A-1", Feature, "one"), board.card("A-2", Bug, "two")]),
+      board.column("doing", 83, [board.card("B-1", Chore, "three")]),
+      board.column("done", 120, [])
+    ],
+    20,
+    0
+  )
+  let lines = ui.render(board.view(b))
+  # active border cyan, the others their own colour
+  assert has_line(lines, term.fg(44, "╭─ ") ++ term.bold("todo (2)"))
+  assert has_line(lines, term.fg(83, "╭─ ") ++ term.bold("doing (1)"))
+  # each card's head: the ref in cyan, then its kind marker
+  assert has_line(lines, term.fg(44, "[A-1]") ++ " +")
+  assert has_line(lines, term.fg(44, "[B-1]") ++ " ~")
+  # titles are cut to the inner content width, w - 4
+  let cell = s => ui.cell(s, 16)
+  assert has_line(lines, term.bg(44, term.fg(236, cell("one"))))  # selected
+  assert has_line(lines, term.dim(cell("two")))  # active column, off the cursor
+  assert has_line(lines, term.fg(245, cell("three")))  # cursor of an inactive column
+  assert has_line(lines, term.fg(120, "│ ") ++ term.dim("(empty)"))
 }

@@ -3,6 +3,7 @@
 # button's key contract.
 
 import terevaka.widget.form
+import terevaka.ui
 import terevaka.term
 
 test "checkbox — Space toggles, other keys do not" {
@@ -54,4 +55,39 @@ test "radio — an empty group keeps the cursor on a real index" {
   assert form.radio_chosen(form.radio_update(r, Up)) == 0
   assert form.radio_chosen(form.radio_update(form.radio_update(r, Up), Enter)) == 0
   assert form.radio_chosen_label(form.radio_update(r, Up)) == ""
+}
+
+test "checkbox — the mark shows the state, focus lights the label" {
+  assert ui.render(form.checkbox_view(form.checkbox("wrap", true), false))
+    == [term.fg(83, "[x]") ++ " wrap"]
+  assert ui.render(form.checkbox_view(form.checkbox("wrap", false), true))
+    == [term.fg(245, "[ ]") ++ " " ++ term.fg(220, "wrap")]
+}
+
+test "radio — k and j mirror Up and Down" {
+  let r = form.radio(["one", "two", "three"])
+  assert form.radio_chosen_label(form.radio_update(form.radio_update(r, Printable('j')), Enter))
+    == "two"
+  assert form.radio_chosen_label(form.radio_update(form.radio_update(r, Printable('k')), Enter))
+    == "three"
+  assert form.radio_chosen(form.radio_update(form.radio_update(r, Printable('x')), Enter)) == 0
+}
+
+# Cursor on "two", "one" still chosen: the dot follows the choice and
+# the highlight follows the cursor, and only while the group is focused.
+test "radio — the dot marks the choice, focus lights the cursor row" {
+  let r = form.radio_update(form.radio(["one", "two"]), Down)
+  assert ui.render(form.radio_view(r, true))
+    == [
+      term.fg(83, "(o)") ++ " one",
+      term.fg(245, "( )") ++ " " ++ term.fg(220, "two")
+    ]
+  assert ui.render(form.radio_view(r, false))
+    == [term.fg(83, "(o)") ++ " one", term.fg(245, "( )") ++ " two"]
+}
+
+test "button — filled when focused, bracketed when not" {
+  let b = form.button("OK")
+  assert ui.render(form.button_view(b, true)) == [term.bg(44, term.fg(236, " OK "))]
+  assert ui.render(form.button_view(b, false)) == [term.fg(245, "[ OK ]")]
 }
