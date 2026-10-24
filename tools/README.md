@@ -69,6 +69,10 @@ suite when there is none — a missing interpreter is not a regression.
 `PYTHON` picks the interpreter, which matters where a version manager
 shadows `python3` with a shim that resolves to nothing.
 
+`cap` and `over` pin the read limit: a reply of exactly 256 bytes, with
+a NUL among them, is an answer; one byte more is noise, and `probe`
+comes back empty.
+
 The no-tty path needs no pty at all, and is worth re-checking by hand
 when the shim changes, since it is the one users hit by accident:
 
