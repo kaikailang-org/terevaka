@@ -1,0 +1,32 @@
+# Mutants that mean exactly what the original means, and so can never
+# be killed. Keyed <file>:<line>:<operator>; the reason is mandatory.
+
+terevaka/nav.kai:17:literal  # wrap: `n <= 0` -> `n <= 1` also sends a one-item list to 0, and for n == 1 every remaining arm lands on 0 too (x < 0 -> n - 1 = 0, x >= 1 -> 0, x == 0 -> 0). The key also covers the `-> 0` on the same line, which nav_test pins with the empty-list cases.
+
+terevaka/term.kai:98:arm  # poll_key: dropping `b if b < 0 -> Unknown` leaves every negative code other than -1 and -2 (matched above) to the catch-all, which is also Unknown.
+
+terevaka/term.kai:98:compare  # poll_key: `b < 0` -> `b <= 0` routes byte 0 to Unknown, which is where the catch-all sends it anyway (0 is below 32).
+
+terevaka/term.kai:98:literal  # poll_key: `b < 0` -> `b < 1`, the same as the compare entry: only byte 0 changes arm, and both arms answer Unknown.
+
+terevaka/ui.kai:172:compare  # fit: `v >= width` -> `v > width` takes the else branch at v == width, which appends spaces(0), the empty string.
+
+terevaka/ui.kai:270:literal  # max_height: the `?? 0` default is read only for a row with no children, where pad_heights maps over no blocks and never uses it.
+
+terevaka/ui.kai:277:compare  # extend_lines: `extra <= 0` -> `extra < 0` takes the else branch at extra == 0, which appends list.repeat(_, 0), the empty list.
+
+terevaka/ui.kai:321:compare  # fit_height: `n > h` -> `n >= h` takes list.take(lines, h) at n == h, which is lines unchanged.
+
+terevaka/widget/board.kai:255:compare  # swap_at: `i < j` -> `i <= j` differs only at i == j, where i and j are the same value either branch picks.
+
+terevaka/widget/board.kai:256:compare  # swap_at: as the line above, for `hi`.
+
+terevaka/widget/board.kai:274:compare  # clamp_cursor: `cur > max` -> `cur >= max` differs only at cur == max, where int.max(max, 0) is cur because a cursor is never negative.
+
+terevaka/widget/board.kai:278:literal  # nth_col: the fallback column is reached only when `active` points past the last column (a board with none, or one built by hand). It has no cards, so its colour and cursor are never read (selected_card finds nothing in it, set_col stores nothing past the last column, and view never asks for it).
+
+terevaka/widget/listbox.kai:57:compare  # scroll_to: `c < offset` -> `c <= offset` snaps the offset to c at c == offset, which leaves it where it was.
+
+terevaka/widget/listbox.kai:101:literal  # item_width: the `?? 0` default is read only when there are no items, and the width is used only to fit an item row, of which there are none.
+
+terevaka/widget/menu.kai:61:literal  # item_width: as listbox's, the default width of an empty menu fits no row.
