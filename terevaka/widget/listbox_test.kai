@@ -84,3 +84,10 @@ test "listbox — the cursor row is highlighted at its absolute index" {
       term.fg(220, "▸") ++ term.bg(44, term.fg(236, " d "))
     ]
 }
+
+test "listbox — k and j mirror Up and Down" {
+  let l = listbox.init(["a", "b", "c"], 2)
+  assert listbox.selected(listbox.update(l, Printable('j'))) == 1
+  assert listbox.selected(listbox.update(l, Printable('k'))) == 2  # wraps to the last
+  assert listbox.selected(listbox.update(l, Printable('x'))) == 0
+}

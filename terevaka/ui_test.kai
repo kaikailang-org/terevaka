@@ -87,3 +87,10 @@ test "box — without a height, the body keeps every line" {
   assert list.length(ui.render(ui.box(6, "", two))) == 4
   assert list.length(ui.render(ui.box_color(75, 6, "", two))) == 4
 }
+
+test "row — an empty child is a block of no width" {
+  # padded to the row's height with blank lines as wide as its widest
+  # line, which for no lines at all is no columns
+  assert ui.render(ui.row([ui.col([]), ui.text("a")])) == ["a"]
+  assert ui.render(ui.row([ui.text("a"), ui.col([]), ui.text("b")])) == ["ab"]
+}

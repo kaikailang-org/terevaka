@@ -2,6 +2,7 @@
 # edges, which is where the wrap-around and the index lookup meet.
 
 import terevaka.widget.menu
+import terevaka.ui
 import terevaka.term
 
 test "menu — cursor wraps in both directions" {
@@ -41,4 +42,13 @@ test "menu — Up moves back one, wrapping from the first to the last" {
   let m = menu.init(["a", "b", "c"])
   assert menu.selected(menu.update(m, Up)) == 2
   assert menu.selected(menu.update(menu.update(m, Down), Up)) == 0
+}
+
+test "menu — the cursor row carries the bar, the rest are dim" {
+  let rows = ui.render(menu.view(menu.update(menu.init(["ab", "c"]), Down)))
+  assert rows
+    == [
+      " " ++ term.dim(" ab "),
+      term.fg(220, "▸") ++ term.bg(44, term.fg(236, " c  "))
+    ]
 }
